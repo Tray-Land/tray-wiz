@@ -1,0 +1,265 @@
+using System.Diagnostics;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
+using TrayWiz.Services;
+using Windows.Graphics;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.Graphics.Dwm;
+using Windows.Win32.UI.WindowsAndMessaging;
+using WinRT.Interop;
+using WinUIEx;
+
+namespace TrayWiz.Controls;
+
+/// <summary>
+/// Borderless, always-on-top popup shown against the tray icon. Slides/fades in,
+/// light-dismisses when focus moves elsewhere. Behavior adapted from Traydio's TrayPopupWindow.
+/// </summary>
+public sealed partial class TrayPopupWindow : WindowEx
+{
+    private const int PopupWidth = 360;
+    private const int PopupHeight = 560;
+
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const int WS_EX_LAYERED = 0x00080000;
+
+    // Mica paints behind the XAML content and ignores UIElement.Opacity, so the fade
+    // uses per-window layered alpha driven by a frame timer, alongside a small slide.
+    private const int ShowSlideDistance = 24;
+    private const int HideSlideDistance = 12;
+    private const double ShowDurationMs = 250;
+    private const double HideDurationMs = 180;
+
+    /// <summary>
+    /// A tray click right after a light-dismiss is the same click that dismissed the
+    /// popup (focus left to the taskbar); treat it as "close" instead of re-showing.
+    /// </summary>
+    private static readonly TimeSpan RecentDismissWindow = TimeSpan.FromMilliseconds(300);
+
+    private readonly DispatcherQueueTimer _hideTimer;
+    private readonly DispatcherQueueTimer _animationTimer;
+    private readonly Stopwatch _animationClock = new();
+    private readonly HWND _hwnd;
+    private readonly MainPage _page = new();
+
+    private bool _isShowing;
+    private bool _isPopupVisible;
+    private DateTime _lastDismissedAtUtc = DateTime.MinValue;
+
+    private bool _isHiding;
+    private int _baseX;
+    private int _baseY;
+    private int _fromOffset;
+    private int _toOffset;
+    private double _fromOpacity;
+    private double _toOpacity;
+    private double _durationMs = ShowDurationMs;
+    private int _currentOffset;
+    private double _currentOpacity;
+
+    public TrayPopupWindow()
+    {
+        InitializeComponent();
+
+        _hwnd = (HWND)WindowNative.GetWindowHandle(this);
+        PageHost.Content = _page;
+
+        AppWindow.SetIcon("Assets\\AppIcon.ico");
+        ConfigureWindowChrome();
+
+        Activated += OnWindowActivated;
+
+        _hideTimer = DispatcherQueue.CreateTimer();
+        _hideTimer.Interval = TimeSpan.FromMilliseconds(150);
+        _hideTimer.IsRepeating = false;
+        _hideTimer.Tick += (_, _) => HideIfFocusLeftWindow();
+
+        _animationTimer = DispatcherQueue.CreateTimer();
+        _animationTimer.Interval = TimeSpan.FromMilliseconds(15);
+        _animationTimer.IsRepeating = true;
+        _animationTimer.Tick += AnimationTimer_Tick;
+    }
+
+    public void Toggle(DateTime clickedAtUtc)
+    {
+        if (_isPopupVisible)
+        {
+            HidePopup();
+            return;
+        }
+
+        if (clickedAtUtc - _lastDismissedAtUtc < RecentDismissWindow)
+            return;
+
+        ShowPopup();
+    }
+
+    public void ShowPopup()
+    {
+        // Position before showing so the window never flashes at a stale location.
+        WindowPlacementService.PositionNearTrayIcon(this, PopupWidth, PopupHeight);
+        _baseX = AppWindow.Position.X;
+        _baseY = AppWindow.Position.Y;
+
+        _hideTimer.Stop();
+        _isShowing = true;
+        _isPopupVisible = true;
+
+        PlayShowAnimation();
+
+        this.Show();
+        Activate();
+        PInvoke.SetForegroundWindow(_hwnd);
+
+        _page.OnPopupShown();
+    }
+
+    public void HidePopup()
+    {
+        _hideTimer.Stop();
+        _isShowing = false;
+
+        if (!_isPopupVisible)
+            return;
+
+        _isPopupVisible = false;
+        _lastDismissedAtUtc = DateTime.UtcNow;
+        PlayHideAnimation();
+    }
+
+    private void PlayShowAnimation()
+    {
+        _isHiding = false;
+        _durationMs = ShowDurationMs;
+        _fromOffset = ScaleForDpi(ShowSlideDistance);
+        _toOffset = 0;
+        _fromOpacity = 0;
+        _toOpacity = 1;
+
+        ApplyFrame(_fromOffset, 0);
+        _animationClock.Restart();
+        _animationTimer.Start();
+    }
+
+    private void PlayHideAnimation()
+    {
+        // Start from wherever a still-running show animation left off, so there's no jump.
+        _isHiding = true;
+        _durationMs = HideDurationMs;
+        _fromOffset = _currentOffset;
+        _toOffset = ScaleForDpi(HideSlideDistance);
+        _fromOpacity = _currentOpacity;
+        _toOpacity = 0;
+
+        _animationClock.Restart();
+        _animationTimer.Start();
+    }
+
+    private void AnimationTimer_Tick(DispatcherQueueTimer sender, object args)
+    {
+        double progress = Math.Min(1, _animationClock.Elapsed.TotalMilliseconds / _durationMs);
+
+        // Cubic ease-out on the way in, ease-in on the way out; linear fade.
+        double eased = _isHiding ? progress * progress * progress : 1 - Math.Pow(1 - progress, 3);
+        int offset = _fromOffset + (int)Math.Round((_toOffset - _fromOffset) * eased);
+        double opacity = _fromOpacity + ((_toOpacity - _fromOpacity) * progress);
+        ApplyFrame(offset, opacity);
+
+        if (progress < 1)
+            return;
+
+        _animationTimer.Stop();
+        _animationClock.Reset();
+        if (_isHiding)
+            this.Hide();
+    }
+
+    private void ApplyFrame(int offset, double opacity)
+    {
+        _currentOffset = offset;
+        _currentOpacity = opacity;
+
+        byte alpha = (byte)Math.Clamp(Math.Round(opacity * 255), 0, 255);
+        _ = PInvoke.SetLayeredWindowAttributes(_hwnd, new COLORREF(0), alpha, LAYERED_WINDOW_ATTRIBUTES_FLAGS.LWA_ALPHA);
+        AppWindow.Move(new PointInt32(_baseX, _baseY + offset));
+    }
+
+    private int ScaleForDpi(int logical)
+    {
+        uint dpi = PInvoke.GetDpiForWindow(_hwnd);
+        return (int)Math.Round(logical * (dpi == 0 ? 96 : dpi) / 96.0);
+    }
+
+    private void ConfigureWindowChrome()
+    {
+        OverlappedPresenter presenter = OverlappedPresenter.Create();
+        presenter.IsMaximizable = false;
+        presenter.IsMinimizable = false;
+        presenter.IsResizable = false;
+        presenter.IsAlwaysOnTop = true;
+        presenter.SetBorderAndTitleBar(true, false);
+        AppWindow.SetPresenter(presenter);
+        AppWindow.IsShownInSwitchers = false;
+
+        unsafe
+        {
+            DWM_WINDOW_CORNER_PREFERENCE corner = DWM_WINDOW_CORNER_PREFERENCE.DWMWCP_ROUND;
+            _ = PInvoke.DwmSetWindowAttribute(_hwnd, DWMWINDOWATTRIBUTE.DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(DWM_WINDOW_CORNER_PREFERENCE));
+        }
+
+        // WS_EX_LAYERED enables the fade; WS_EX_TOOLWINDOW keeps it off the taskbar and Alt-Tab.
+        int exStyle = PInvoke.GetWindowLong(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
+        _ = PInvoke.SetWindowLong(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE, exStyle | WS_EX_LAYERED | WS_EX_TOOLWINDOW);
+    }
+
+    private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
+        {
+            _isShowing = false;
+            _hideTimer.Stop();
+            return;
+        }
+
+        if (_isShowing || !_isPopupVisible)
+            return;
+
+        // Deactivation also happens when a flyout/dropdown takes focus; check shortly after.
+        _hideTimer.Stop();
+        _hideTimer.Start();
+    }
+
+    private void HideIfFocusLeftWindow()
+    {
+        _hideTimer.Stop();
+        if (_isPopupVisible && !ShouldRemainVisible(PInvoke.GetForegroundWindow()))
+            HidePopup();
+    }
+
+    private bool ShouldRemainVisible(HWND foreground)
+    {
+        if (foreground == 0)
+            return false;
+
+        if (foreground == _hwnd || PInvoke.GetAncestor(foreground, GET_ANCESTOR_FLAGS.GA_ROOT) == _hwnd)
+            return true;
+
+        // WinUI flyouts/ComboBox dropdowns open in their own popup HWNDs; classic menus use #32768.
+        Span<char> buffer = stackalloc char[64];
+        int length = PInvoke.GetClassName(foreground, buffer);
+        if (length <= 0)
+            return false;
+
+        ReadOnlySpan<char> className = buffer[..length];
+        return className.SequenceEqual("#32768") || className.SequenceEqual("Xaml_WindowedPopupClass");
+    }
+
+    private void EscapeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        HidePopup();
+    }
+}

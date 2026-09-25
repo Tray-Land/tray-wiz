@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "TrayWiz (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "TrayWiz (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
