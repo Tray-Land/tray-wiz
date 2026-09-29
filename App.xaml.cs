@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using TrayWiz.Controls;
 using TrayWiz.Services;
 using TrayWiz.ViewModels;
+using Windows.ApplicationModel;
 using WinUIEx;
 
 namespace TrayWiz;
@@ -16,10 +17,16 @@ public partial class App : Application
     private const string MutexName = "Local\\TrayWiz_SingleInstance";
     private const string ShowEventName = "Local\\TrayWiz_ShowPopup";
 
+    // Startup leaves JIT and first-scan state behind that the idle app never touches again.
+    private static readonly TimeSpan StartupTrimDelay = TimeSpan.FromSeconds(30);
+
     private TrayIcon? _trayIcon;
     private TrayPopupWindow? _popup;
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _showEvent;
+    private RegisteredWaitHandle? _showWait;
+    private Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
+    private StartupTaskState? _startupState;
     private bool _isShuttingDown;
 
     public App()
@@ -43,10 +50,15 @@ public partial class App : Application
             // Already running: ask that instance to show its popup, then quit.
             try
             {
+                // Let the running instance take the foreground when it shows its popup.
+                Windows.Win32.PInvoke.AllowSetForegroundWindow(unchecked((uint)-1)); // ASFW_ANY
                 using EventWaitHandle show = EventWaitHandle.OpenExisting(ShowEventName);
                 show.Set();
             }
-            catch (WaitHandleCannotBeOpenedException) { }
+            catch
+            {
+                // The other instance may be shutting down; nothing to do.
+            }
 
             _singleInstanceMutex.Dispose();
             _singleInstanceMutex = null;
@@ -54,25 +66,41 @@ public partial class App : Application
             return;
         }
 
+        _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
-        ListenForShowRequests();
+        _showWait = ThreadPool.RegisterWaitForSingleObject(_showEvent,
+            (_, _) => _dispatcher.TryEnqueue(() => GetPopup().ShowPopup()), null, Timeout.Infinite, executeOnlyOnce: false);
 
-        _trayIcon = new TrayIcon(1, "Assets/AppIcon.ico", "TrayWiz");
+        _trayIcon = new TrayIcon(1, TrayIconPath, "TrayWiz");
         _trayIcon.Selected += (_, _) => GetPopup().Toggle(DateTime.UtcNow);
         _trayIcon.ContextMenu += TrayIcon_ContextMenu;
         _trayIcon.IsVisible = true;
         WindowPlacementService.SetTrayIconSource(_trayIcon);
+        SystemThemeService.Changed += (_, _) => _dispatcher?.TryEnqueue(() => _trayIcon?.SetIcon(TrayIconPath));
+        _ = RefreshStartupStateAsync();
 
         // Start discovery right away so the list is ready by the first click.
         _ = MainViewModel.Instance.ScanAsync();
+        MemoryService.ReleaseIdle(StartupTrimDelay);
     }
+
+    // A white glyph disappears on a light taskbar, which follows the Windows theme, not the app theme.
+    private static string TrayIconPath => Path.Combine(
+        AppContext.BaseDirectory, "Assets", SystemThemeService.IsLight ? "AppIcon-dark.ico" : "AppIcon.ico");
+
+    private async Task RefreshStartupStateAsync() => _startupState = await StartupService.GetStateAsync();
 
     private TrayPopupWindow GetPopup()
     {
         if (_popup is null)
         {
             _popup = new TrayPopupWindow();
-            _popup.Closed += (_, _) => _popup = null;
+            _popup.Closed += (_, _) =>
+            {
+                _popup = null;
+                if (!_isShuttingDown)
+                    MemoryService.ReleaseIdle();
+            };
         }
         return _popup;
     }
@@ -92,36 +120,23 @@ public partial class App : Application
         menu.Items.Add(new MenuFlyoutItem { Text = "Search for bulbs", Icon = new FontIcon { Glyph = "" }, Command = vm.ScanCommand });
         menu.Items.Add(new MenuFlyoutSeparator());
 
+        if (_startupState is not null)
+        {
+            ToggleMenuFlyoutItem startup = new()
+            {
+                Text = "Start with Windows",
+                IsChecked = _startupState is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy,
+                IsEnabled = _startupState is StartupTaskState.Enabled or StartupTaskState.Disabled,
+            };
+            startup.Click += async (_, _) => _startupState = await StartupService.SetEnabledAsync(startup.IsChecked);
+            menu.Items.Add(startup);
+        }
+
         MenuFlyoutItem exit = new() { Text = "Exit", Icon = new FontIcon { Glyph = "" } };
         exit.Click += (_, _) => ShutdownAndExit();
         menu.Items.Add(exit);
 
         args.Flyout = menu;
-    }
-
-    private void ListenForShowRequests()
-    {
-        Microsoft.UI.Dispatching.DispatcherQueue dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-        EventWaitHandle showEvent = _showEvent!;
-
-        Thread listener = new(() =>
-        {
-            try
-            {
-                while (showEvent.WaitOne())
-                {
-                    if (_isShuttingDown)
-                        return;
-                    dispatcher.TryEnqueue(() => GetPopup().ShowPopup());
-                }
-            }
-            catch (ObjectDisposedException) { }
-        })
-        {
-            IsBackground = true,
-            Name = "TrayWiz show-request listener",
-        };
-        listener.Start();
     }
 
     /// <summary>The app's only exit path: removes the tray icon and releases single-instance handles.</summary>
@@ -131,7 +146,7 @@ public partial class App : Application
             return;
         _isShuttingDown = true;
 
-        _popup?.Close();
+        _popup?.CloseWindow();
         if (_trayIcon is not null)
         {
             _trayIcon.IsVisible = false;
@@ -139,7 +154,7 @@ public partial class App : Application
             _trayIcon = null;
         }
 
-        _showEvent?.Set();
+        _showWait?.Unregister(null);
         _showEvent?.Dispose();
         _singleInstanceMutex?.ReleaseMutex();
         _singleInstanceMutex?.Dispose();
