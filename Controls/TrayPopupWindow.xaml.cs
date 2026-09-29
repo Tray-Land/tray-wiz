@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using TrayWiz.Services;
 using Windows.Graphics;
+using Windows.UI.ViewManagement;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Dwm;
@@ -39,14 +40,22 @@ public sealed partial class TrayPopupWindow : WindowEx
     /// </summary>
     private static readonly TimeSpan RecentDismissWindow = TimeSpan.FromMilliseconds(300);
 
+    /// <summary>Hidden this long, the window closes for real so the idle app holds no XAML tree.</summary>
+    private static readonly TimeSpan CloseDelay = TimeSpan.FromMinutes(1);
+
     private readonly DispatcherQueueTimer _hideTimer;
+    private readonly DispatcherQueueTimer _closeTimer;
     private readonly DispatcherQueueTimer _animationTimer;
     private readonly Stopwatch _animationClock = new();
     private readonly HWND _hwnd;
     private readonly MainPage _page = new();
+    private readonly ShellBackdrop _backdrop = new();
+    private readonly UISettings _uiSettings = new();
 
     private bool _isShowing;
     private bool _isPopupVisible;
+    private bool _allowClose;
+    private bool _isClosed;
     private DateTime _lastDismissedAtUtc = DateTime.MinValue;
 
     private bool _isHiding;
@@ -67,15 +76,26 @@ public sealed partial class TrayPopupWindow : WindowEx
         _hwnd = (HWND)WindowNative.GetWindowHandle(this);
         PageHost.Content = _page;
 
+        SystemBackdrop = _backdrop;
+        ApplyShellTheme();
+        // Fires (off the UI thread) when the accent color or light/dark mode changes.
+        _uiSettings.ColorValuesChanged += OnColorValuesChanged;
+
         AppWindow.SetIcon("Assets\\AppIcon.ico");
         ConfigureWindowChrome();
 
         Activated += OnWindowActivated;
+        AppWindow.Closing += OnAppWindowClosing;
 
         _hideTimer = DispatcherQueue.CreateTimer();
         _hideTimer.Interval = TimeSpan.FromMilliseconds(150);
         _hideTimer.IsRepeating = false;
         _hideTimer.Tick += (_, _) => HideIfFocusLeftWindow();
+
+        _closeTimer = DispatcherQueue.CreateTimer();
+        _closeTimer.Interval = CloseDelay;
+        _closeTimer.IsRepeating = false;
+        _closeTimer.Tick += (_, _) => CloseIfStillHidden();
 
         _animationTimer = DispatcherQueue.CreateTimer();
         _animationTimer.Interval = TimeSpan.FromMilliseconds(15);
@@ -105,8 +125,12 @@ public sealed partial class TrayPopupWindow : WindowEx
         _baseY = AppWindow.Position.Y;
 
         _hideTimer.Stop();
+        _closeTimer.Stop();
         _isShowing = true;
         _isPopupVisible = true;
+
+        // Also re-read here, in case a settings change (e.g. accent on the taskbar) raised no ColorValuesChanged.
+        ApplyShellTheme();
 
         PlayShowAnimation();
 
@@ -128,6 +152,59 @@ public sealed partial class TrayPopupWindow : WindowEx
         _isPopupVisible = false;
         _lastDismissedAtUtc = DateTime.UtcNow;
         PlayHideAnimation();
+
+        _closeTimer.Stop();
+        _closeTimer.Start();
+    }
+
+    /// <summary>
+    /// Closes the window for real: stops its timers and unsubscribes from app-lifetime events so
+    /// nothing keeps the window alive.
+    /// </summary>
+    public void CloseWindow()
+    {
+        if (_isClosed)
+            return;
+
+        _isClosed = true;
+        _hideTimer.Stop();
+        _closeTimer.Stop();
+        _animationTimer.Stop();
+        _page.Release();
+
+        _uiSettings.ColorValuesChanged -= OnColorValuesChanged;
+        Activated -= OnWindowActivated;
+        AppWindow.Closing -= OnAppWindowClosing;
+
+        _allowClose = true;
+        Close();
+    }
+
+    private void CloseIfStillHidden()
+    {
+        if (!_isPopupVisible)
+            CloseWindow();
+    }
+
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        // Alt+F4 hides like any other dismissal.
+        if (!_allowClose)
+        {
+            args.Cancel = true;
+            HidePopup();
+        }
+    }
+
+    // Raised off the UI thread when the accent color or light/dark mode changes.
+    private void OnColorValuesChanged(UISettings sender, object args) => DispatcherQueue.TryEnqueue(ApplyShellTheme);
+
+    /// <summary>Matches the taskbar's mode and accent tint, like the shell's own flyouts.</summary>
+    private void ApplyShellTheme()
+    {
+        bool isLight = SystemThemeService.IsLight;
+        PopupRoot.RequestedTheme = isLight ? ElementTheme.Light : ElementTheme.Dark;
+        _backdrop.Update(isLight, SystemThemeService.ShowsAccentColor ? _uiSettings.GetColorValue(UIColorType.AccentDark2) : null);
     }
 
     private void PlayShowAnimation()
