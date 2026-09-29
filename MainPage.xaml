@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:TrayWiz"
     xmlns:models="using:TrayWiz.Models"
     Background="Transparent"
     IsTabStop="True"
@@ -18,291 +19,289 @@
             <Setter Property="MinWidth" Value="0" />
         </Style>
 
-        <Style x:Key="SwatchButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="28" />
-            <Setter Property="Height" Value="28" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Ellipse
-                            Fill="{TemplateBinding Background}"
-                            Stroke="{ThemeResource ControlStrokeColorDefaultBrush}"
-                            StrokeThickness="1" />
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+        <!--  Quick Settings-style split tile halves. Style (accent vs default) follows the bulb's power state.  -->
+        <Style x:Key="TileToggleStyle" TargetType="ToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="CornerRadius" Value="4,0,0,4" />
+            <Setter Property="Padding" Value="0" />
         </Style>
+
+        <ItemsPanelTemplate x:Key="TilePanelTemplate">
+            <VariableSizedWrapGrid
+                ItemWidth="104"
+                MaximumRowsOrColumns="3"
+                Orientation="Horizontal" />
+        </ItemsPanelTemplate>
+
+        <DataTemplate x:Key="BulbTileTemplate" x:DataType="models:Bulb">
+            <!--  Drag a tile onto a group to move it there, or anywhere else to take it out of its group.  -->
+            <StackPanel
+                Margin="4,4,4,12"
+                Background="Transparent"
+                ContextRequested="Tile_ContextRequested"
+                DragStarting="Tile_DragStarting"
+                DropCompleted="Tile_DropCompleted"
+                Loaded="Tile_Loaded"
+                Spacing="8"
+                ToolTipService.ToolTip="{x:Bind Subtitle, Mode=OneWay}">
+                <!--  Split tile: left half toggles power, right half opens the bulb's detail view.  -->
+                <Grid Height="48" ColumnSpacing="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="40" />
+                    </Grid.ColumnDefinitions>
+
+                    <ToggleButton
+                        AutomationProperties.Name="{x:Bind DisplayName, Mode=OneWay}"
+                        Click="TilePower_Click"
+                        IsChecked="{x:Bind IsOn, Mode=OneWay}"
+                        Style="{StaticResource TileToggleStyle}">
+                        <FontIcon FontSize="16" Glyph="&#xE82F;" />
+                    </ToggleButton>
+
+                    <Button
+                        Grid.Column="1"
+                        Padding="0"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="{x:Bind local:MainPage.DetailsName(DisplayName), Mode=OneWay}"
+                        Click="TileDetails_Click"
+                        CornerRadius="0,4,4,0"
+                        Style="{x:Bind local:MainPage.TileButtonStyle(IsOn), Mode=OneWay}">
+                        <FontIcon FontSize="12" Glyph="&#xE76C;" />
+                    </Button>
+                </Grid>
+
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    AutomationProperties.AccessibilityView="Raw"
+                    MaxLines="2"
+                    Opacity="{x:Bind local:MainPage.TileLabelOpacity(IsReachable), Mode=OneWay}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind DisplayName, Mode=OneWay}"
+                    TextAlignment="Center"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
     </Page.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        <Grid x:Name="HomeView">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-        <!--  Header  -->
-        <Grid Padding="16,12,8,8" ColumnSpacing="10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+            <!--  Header  -->
+            <Grid Padding="16,12,8,8" ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <FontIcon
+                <FontIcon
+                    VerticalAlignment="Center"
+                    FontSize="20"
+                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                    Glyph="&#xE82F;" />
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="TrayWiz" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+                </StackPanel>
+
+                <StackPanel
+                    Grid.Column="2"
+                    Orientation="Horizontal"
+                    Spacing="2">
+                    <Button
+                        AutomationProperties.Name="All lights on"
+                        Command="{x:Bind ViewModel.AllOnCommand}"
+                        Style="{StaticResource HeaderIconButtonStyle}"
+                        ToolTipService.ToolTip="All on">
+                        <FontIcon FontSize="16" Glyph="&#xE706;" />
+                    </Button>
+                    <Button
+                        AutomationProperties.Name="All lights off"
+                        Command="{x:Bind ViewModel.AllOffCommand}"
+                        Style="{StaticResource HeaderIconButtonStyle}"
+                        ToolTipService.ToolTip="All off">
+                        <FontIcon FontSize="16" Glyph="&#xE708;" />
+                    </Button>
+                    <Button
+                        AutomationProperties.Name="Search for bulbs"
+                        Command="{x:Bind ViewModel.ScanCommand}"
+                        Style="{StaticResource HeaderIconButtonStyle}"
+                        ToolTipService.ToolTip="Search for bulbs">
+                        <FontIcon FontSize="16" Glyph="&#xE72C;" />
+                    </Button>
+                    <Button
+                        AutomationProperties.Name="More options"
+                        Style="{StaticResource HeaderIconButtonStyle}"
+                        ToolTipService.ToolTip="More">
+                        <FontIcon FontSize="16" Glyph="&#xE712;" />
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuFlyoutItem Click="NewGroup_Click" Text="New group">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE710;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Click="Exit_Click" Text="Exit TrayWiz">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE8BB;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <ProgressBar
+                Grid.Row="1"
+                Margin="16,0"
+                IsIndeterminate="True"
+                Visibility="{x:Bind ViewModel.IsScanning, Mode=OneWay}" />
+
+            <!--  Empty state  -->
+            <StackPanel
+                Grid.Row="2"
+                MaxWidth="260"
+                HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                FontSize="20"
-                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
-                Glyph="&#xE82F;" />
-
-            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="TrayWiz" />
+                Spacing="8"
+                Visibility="{x:Bind ViewModel.EmptyStateVisibility, Mode=OneWay}">
+                <FontIcon
+                    FontSize="32"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Glyph="&#xE82F;" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="No bulbs found" />
                 <TextBlock
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+                    Text="Make sure this PC is on the same network as your WiZ lights and that 'Allow local communication' is on in the WiZ app."
+                    TextAlignment="Center"
+                    TextWrapping="Wrap" />
+                <Button
+                    Margin="0,4,0,0"
+                    HorizontalAlignment="Center"
+                    Command="{x:Bind ViewModel.ScanCommand}"
+                    Content="Search again" />
             </StackPanel>
 
-            <StackPanel
-                Grid.Column="2"
-                Orientation="Horizontal"
-                Spacing="2">
-                <Button
-                    AutomationProperties.Name="All lights on"
-                    Command="{x:Bind ViewModel.AllOnCommand}"
-                    Style="{StaticResource HeaderIconButtonStyle}"
-                    ToolTipService.ToolTip="All on">
-                    <FontIcon FontSize="16" Glyph="&#xE706;" />
-                </Button>
-                <Button
-                    AutomationProperties.Name="All lights off"
-                    Command="{x:Bind ViewModel.AllOffCommand}"
-                    Style="{StaticResource HeaderIconButtonStyle}"
-                    ToolTipService.ToolTip="All off">
-                    <FontIcon FontSize="16" Glyph="&#xE708;" />
-                </Button>
-                <Button
-                    AutomationProperties.Name="Search for bulbs"
-                    Command="{x:Bind ViewModel.ScanCommand}"
-                    Style="{StaticResource HeaderIconButtonStyle}"
-                    ToolTipService.ToolTip="Search for bulbs">
-                    <FontIcon FontSize="16" Glyph="&#xE72C;" />
-                </Button>
-                <Button
-                    AutomationProperties.Name="More options"
-                    Style="{StaticResource HeaderIconButtonStyle}"
-                    ToolTipService.ToolTip="More">
-                    <FontIcon FontSize="16" Glyph="&#xE712;" />
-                    <Button.Flyout>
-                        <MenuFlyout Placement="BottomEdgeAlignedRight">
-                            <MenuFlyoutItem Click="Exit_Click" Text="Exit TrayWiz">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE8BB;" />
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                        </MenuFlyout>
-                    </Button.Flyout>
-                </Button>
-            </StackPanel>
+            <!--  Bulb tiles. Dropping a tile here (outside any group) takes it out of its group.  -->
+            <ScrollViewer
+                Grid.Row="2"
+                Padding="12,8,12,12"
+                AllowDrop="True"
+                Background="Transparent"
+                DragOver="Ungrouped_DragOver"
+                Drop="Ungrouped_Drop">
+                <!--  ItemsControl rather than ItemsRepeater: a handful of bulbs doesn't need virtualization, and never recycling containers means each bulb's controls stay bound to that bulb for life.  -->
+                <StackPanel Width="312" HorizontalAlignment="Center">
+                    <ItemsControl
+                        ItemTemplate="{StaticResource BulbTileTemplate}"
+                        ItemsPanel="{StaticResource TilePanelTemplate}"
+                        ItemsSource="{x:Bind ViewModel.Ungrouped}" />
+
+                    <ItemsControl x:Name="GroupsList" ItemsSource="{x:Bind ViewModel.Groups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="models:BulbGroup">
+                                <StackPanel
+                                    Margin="0,4,0,8"
+                                    AllowDrop="True"
+                                    Background="Transparent"
+                                    CornerRadius="4"
+                                    DragEnter="Group_DragEnter"
+                                    DragLeave="Group_DragLeave"
+                                    DragOver="Group_DragOver"
+                                    Drop="Group_Drop">
+                                    <Grid Padding="4,0,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            AutomationProperties.HeadingLevel="Level2"
+                                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                                            Text="{x:Bind Name, Mode=OneWay}"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <Button
+                                            Grid.Column="1"
+                                            AutomationProperties.Name="{x:Bind local:MainPage.GroupPowerName(Name, x:True), Mode=OneWay}"
+                                            Click="GroupOn_Click"
+                                            Content="On"
+                                            FontSize="12"
+                                            Style="{StaticResource HeaderIconButtonStyle}"
+                                            ToolTipService.ToolTip="Turn group on" />
+                                        <Button
+                                            Grid.Column="2"
+                                            AutomationProperties.Name="{x:Bind local:MainPage.GroupPowerName(Name, x:False), Mode=OneWay}"
+                                            Click="GroupOff_Click"
+                                            Content="Off"
+                                            FontSize="12"
+                                            Style="{StaticResource HeaderIconButtonStyle}"
+                                            ToolTipService.ToolTip="Turn group off" />
+                                        <Button
+                                            Grid.Column="3"
+                                            AutomationProperties.Name="{x:Bind local:MainPage.GroupOptionsName(Name), Mode=OneWay}"
+                                            Click="GroupOptions_Click"
+                                            Style="{StaticResource HeaderIconButtonStyle}"
+                                            ToolTipService.ToolTip="Group options">
+                                            <FontIcon FontSize="14" Glyph="&#xE712;" />
+                                        </Button>
+                                    </Grid>
+                                    <Rectangle
+                                        Height="1"
+                                        Margin="4,0,4,4"
+                                        Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                                    <ItemsControl
+                                        ItemTemplate="{StaticResource BulbTileTemplate}"
+                                        ItemsPanel="{StaticResource TilePanelTemplate}"
+                                        ItemsSource="{x:Bind Bulbs}" />
+                                    <TextBlock
+                                        Margin="4,12,4,16"
+                                        HorizontalAlignment="Center"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="Drag lights here"
+                                        Visibility="{x:Bind EmptyVisibility, Mode=OneWay}" />
+
+                                    <Rectangle
+                                        Height="1"
+                                        Margin="4,0"
+                                        Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
-        <ProgressBar
-            Grid.Row="1"
-            Margin="16,0"
-            IsIndeterminate="True"
-            Visibility="{x:Bind ViewModel.IsScanning, Mode=OneWay}" />
-
-        <!--  Empty state  -->
-        <StackPanel
-            Grid.Row="2"
-            MaxWidth="260"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Spacing="8"
-            Visibility="{x:Bind ViewModel.EmptyStateVisibility, Mode=OneWay}">
-            <FontIcon
-                FontSize="32"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Glyph="&#xE82F;" />
-            <TextBlock
-                HorizontalAlignment="Center"
-                Style="{StaticResource BodyStrongTextBlockStyle}"
-                Text="No bulbs found" />
-            <TextBlock
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Style="{StaticResource CaptionTextBlockStyle}"
-                Text="Make sure this PC is on the same network as your WiZ lights and that 'Allow local communication' is on in the WiZ app."
-                TextAlignment="Center"
-                TextWrapping="Wrap" />
-            <Button
-                Margin="0,4,0,0"
-                HorizontalAlignment="Center"
-                Command="{x:Bind ViewModel.ScanCommand}"
-                Content="Search again" />
-        </StackPanel>
-
-        <!--  Bulb list  -->
-        <ScrollViewer Grid.Row="2" Padding="12,4,12,12">
-            <!--  ItemsControl rather than ItemsRepeater: a handful of bulbs doesn't need virtualization, and never recycling containers means each bulb's controls stay bound to that bulb for life.  -->
-            <ItemsControl ItemsSource="{x:Bind ViewModel.Bulbs}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Spacing="4" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="models:Bulb">
-                        <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                            <Expander.Header>
-                                <Grid Padding="0,6" ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <Ellipse
-                                        Width="22"
-                                        Height="22"
-                                        VerticalAlignment="Center"
-                                        Stroke="{ThemeResource ControlStrokeColorDefaultBrush}"
-                                        StrokeThickness="1">
-                                        <Ellipse.Fill>
-                                            <SolidColorBrush Color="{x:Bind SwatchColor, Mode=OneWay}" />
-                                        </Ellipse.Fill>
-                                    </Ellipse>
-
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock
-                                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                                            Text="{x:Bind DisplayName, Mode=OneWay}"
-                                            TextTrimming="CharacterEllipsis" />
-                                        <TextBlock
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            Style="{StaticResource CaptionTextBlockStyle}"
-                                            Text="{x:Bind Subtitle, Mode=OneWay}"
-                                            TextTrimming="CharacterEllipsis"
-                                            TextWrapping="NoWrap" />
-                                    </StackPanel>
-
-                                    <ToggleSwitch
-                                        Grid.Column="2"
-                                        MinWidth="0"
-                                        Margin="0,0,-8,0"
-                                        VerticalAlignment="Center"
-                                        AutomationProperties.Name="{x:Bind DisplayName, Mode=OneWay}"
-                                        IsOn="{x:Bind IsOn, Mode=OneWay}"
-                                        OffContent=""
-                                        OnContent=""
-                                        Toggled="Power_Toggled" />
-                                </Grid>
-                            </Expander.Header>
-
-                            <StackPanel Spacing="14">
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox
-                                        Header="Name"
-                                        KeyDown="NameBox_KeyDown"
-                                        LostFocus="NameBox_LostFocus"
-                                        MaxLength="40"
-                                        PlaceholderText="{x:Bind DisplayName, Mode=OneWay}"
-                                        Text="{x:Bind Name, Mode=OneWay}" />
-                                    <Button
-                                        Grid.Column="1"
-                                        VerticalAlignment="Bottom"
-                                        Command="{x:Bind IdentifyCommand}"
-                                        ToolTipService.ToolTip="Blink this bulb so you can find it">
-                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <FontIcon FontSize="14" Glyph="&#xE7B3;" />
-                                            <TextBlock Text="Blink" />
-                                        </StackPanel>
-                                    </Button>
-                                </Grid>
-
-                                <!--
-                                    Bindings to bulb state are OneWay only: while bindings apply, a slider clamps its
-                                    value to its current range, and a TwoWay binding would write that back and change a
-                                    real light. Commands go out from the change handlers (see MainPage.IsUserChange).
-                                -->
-                                <Slider
-                                    Header="Brightness"
-                                    Maximum="100"
-                                    Minimum="10"
-                                    StepFrequency="1"
-                                    Value="{x:Bind Brightness, Mode=OneWay}"
-                                    ValueChanged="Brightness_ValueChanged" />
-
-                                <Slider
-                                    Header="White temperature (K)"
-                                    Minimum="{x:Bind MinTemperature, Mode=OneWay}"
-                                    Maximum="{x:Bind MaxTemperature, Mode=OneWay}"
-                                    StepFrequency="50"
-                                    Value="{x:Bind Temperature, Mode=OneWay}"
-                                    ValueChanged="Temperature_ValueChanged"
-                                    Visibility="{x:Bind TemperatureVisibility, Mode=OneWay}" />
-
-                                <StackPanel Spacing="8" Visibility="{x:Bind ColorVisibility, Mode=OneWay}">
-                                    <TextBlock Text="Color" />
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Button Background="#FF3B30" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="FF3B30" ToolTipService.ToolTip="Red" />
-                                        <Button Background="#FF9500" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="FF9500" ToolTipService.ToolTip="Orange" />
-                                        <Button Background="#FFCC00" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="FFCC00" ToolTipService.ToolTip="Yellow" />
-                                        <Button Background="#34C759" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="34C759" ToolTipService.ToolTip="Green" />
-                                        <Button Background="#32ADE6" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="32ADE6" ToolTipService.ToolTip="Cyan" />
-                                        <Button Background="#007AFF" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="007AFF" ToolTipService.ToolTip="Blue" />
-                                        <Button Background="#AF52DE" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="AF52DE" ToolTipService.ToolTip="Purple" />
-                                        <Button
-                                            Width="28"
-                                            Height="28"
-                                            Padding="0"
-                                            AutomationProperties.Name="Custom color"
-                                            CornerRadius="14"
-                                            ToolTipService.ToolTip="Custom color">
-                                            <FontIcon FontSize="12" Glyph="&#xE790;" />
-                                            <Button.Flyout>
-                                                <Flyout
-                                                    Closed="ColorFlyout_Closed"
-                                                    Opening="ColorFlyout_Opening"
-                                                    ShouldConstrainToRootBounds="False">
-                                                    <ColorPicker
-                                                        ColorChanged="ColorPicker_ColorChanged"
-                                                        ColorSpectrumShape="Ring"
-                                                        IsAlphaEnabled="False"
-                                                        IsColorChannelTextInputVisible="False"
-                                                        IsColorPreviewVisible="False"
-                                                        IsHexInputVisible="False"
-                                                        IsMoreButtonVisible="False" />
-                                                </Flyout>
-                                            </Button.Flyout>
-                                        </Button>
-                                    </StackPanel>
-                                </StackPanel>
-
-                                <ComboBox
-                                    HorizontalAlignment="Stretch"
-                                    Header="Scene"
-                                    ItemsSource="{x:Bind Scenes, Mode=OneWay}"
-                                    PlaceholderText="None"
-                                    SelectedIndex="{x:Bind SceneIndex, Mode=OneWay}"
-                                    SelectionChanged="Scene_SelectionChanged" />
-
-                                <TextBlock
-                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                    IsTextSelectionEnabled="True"
-                                    Style="{StaticResource CaptionTextBlockStyle}">
-                                    <Run Text="{x:Bind ModuleName, Mode=OneWay}" />
-                                    <Run Text="·" />
-                                    <Run Text="{x:Bind Mac}" />
-                                </TextBlock>
-                            </StackPanel>
-                        </Expander>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+        <!--  A fresh BulbDetailView is placed here when a tile's chevron is clicked.  -->
+        <ContentPresenter x:Name="DetailHost" Visibility="Collapsed">
+            <ContentPresenter.ContentTransitions>
+                <TransitionCollection>
+                    <EntranceThemeTransition FromHorizontalOffset="40" FromVerticalOffset="0" />
+                </TransitionCollection>
+            </ContentPresenter.ContentTransitions>
+        </ContentPresenter>
     </Grid>
 </Page>

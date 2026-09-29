@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="TrayWiz.Controls.BulbDetailView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    KeyboardAcceleratorPlacementMode="Hidden"
+    mc:Ignorable="d">
+
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="Escape" Invoked="BackAccelerator_Invoked" />
+        <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="BackAccelerator_Invoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <UserControl.Resources>
+        <Style x:Key="SwatchButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Ellipse
+                            Fill="{TemplateBinding Background}"
+                            Stroke="{ThemeResource ControlStrokeColorDefaultBrush}"
+                            StrokeThickness="1" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--  Header: back, bulb identity, power  -->
+        <Grid Padding="8,12,16,8" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button
+                x:Name="BackButton"
+                Padding="8"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="BulbDetailBack"
+                AutomationProperties.Name="Back"
+                Background="Transparent"
+                BorderThickness="0"
+                Click="Back_Click"
+                ToolTipService.ToolTip="Back">
+                <FontIcon FontSize="14" Glyph="&#xE72B;" />
+            </Button>
+
+            <Ellipse
+                Grid.Column="1"
+                Width="22"
+                Height="22"
+                VerticalAlignment="Center"
+                AutomationProperties.AccessibilityView="Raw"
+                Stroke="{ThemeResource ControlStrokeColorDefaultBrush}"
+                StrokeThickness="1">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="{x:Bind Bulb.SwatchColor, Mode=OneWay}" />
+                </Ellipse.Fill>
+            </Ellipse>
+
+            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                <TextBlock
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="{x:Bind Bulb.DisplayName, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind Bulb.Subtitle, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="NoWrap" />
+            </StackPanel>
+
+            <ToggleSwitch
+                Grid.Column="3"
+                MinWidth="0"
+                Margin="0,0,-8,0"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="BulbDetailPower"
+                AutomationProperties.Name="{x:Bind Bulb.DisplayName, Mode=OneWay}"
+                IsOn="{x:Bind Bulb.IsOn, Mode=OneWay}"
+                OffContent=""
+                OnContent=""
+                Toggled="Power_Toggled" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" Padding="16,4,16,16">
+            <StackPanel Spacing="14">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        Header="Name"
+                        KeyDown="NameBox_KeyDown"
+                        LostFocus="NameBox_LostFocus"
+                        MaxLength="40"
+                        PlaceholderText="{x:Bind Bulb.DisplayName, Mode=OneWay}"
+                        Text="{x:Bind Bulb.Name, Mode=OneWay}" />
+                    <Button
+                        Grid.Column="1"
+                        VerticalAlignment="Bottom"
+                        Command="{x:Bind Bulb.IdentifyCommand}"
+                        ToolTipService.ToolTip="Blink this bulb so you can find it">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE7B3;" />
+                            <TextBlock Text="Blink" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <!--
+                    Bindings to bulb state are OneWay only: while bindings apply, a slider clamps its
+                    value to its current range, and a TwoWay binding would write that back and change a
+                    real light. Commands go out from the change handlers (see IsUserChange). A fresh
+                    view is created per bulb, so the controls never rebind from one bulb to another.
+                -->
+                <Slider
+                    Header="Brightness"
+                    Maximum="100"
+                    Minimum="10"
+                    StepFrequency="1"
+                    Value="{x:Bind Bulb.Brightness, Mode=OneWay}"
+                    ValueChanged="Brightness_ValueChanged" />
+
+                <Slider
+                    Header="White temperature (K)"
+                    Minimum="{x:Bind Bulb.MinTemperature, Mode=OneWay}"
+                    Maximum="{x:Bind Bulb.MaxTemperature, Mode=OneWay}"
+                    StepFrequency="50"
+                    Value="{x:Bind Bulb.Temperature, Mode=OneWay}"
+                    ValueChanged="Temperature_ValueChanged"
+                    Visibility="{x:Bind Bulb.TemperatureVisibility, Mode=OneWay}" />
+
+                <StackPanel Spacing="8" Visibility="{x:Bind Bulb.ColorVisibility, Mode=OneWay}">
+                    <TextBlock Text="Color" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button AutomationProperties.Name="Red" Background="#FF3B30" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="FF3B30" ToolTipService.ToolTip="Red" />
+                        <Button AutomationProperties.Name="Orange" Background="#FF9500" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="FF9500" ToolTipService.ToolTip="Orange" />
+                        <Button AutomationProperties.Name="Yellow" Background="#FFCC00" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="FFCC00" ToolTipService.ToolTip="Yellow" />
+                        <Button AutomationProperties.Name="Green" Background="#34C759" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="34C759" ToolTipService.ToolTip="Green" />
+                        <Button AutomationProperties.Name="Cyan" Background="#32ADE6" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="32ADE6" ToolTipService.ToolTip="Cyan" />
+                        <Button AutomationProperties.Name="Blue" Background="#007AFF" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="007AFF" ToolTipService.ToolTip="Blue" />
+                        <Button AutomationProperties.Name="Purple" Background="#AF52DE" Click="PresetColor_Click" Style="{StaticResource SwatchButtonStyle}" Tag="AF52DE" ToolTipService.ToolTip="Purple" />
+                        <Button
+                            Width="28"
+                            Height="28"
+                            Padding="0"
+                            AutomationProperties.Name="Custom color"
+                            CornerRadius="14"
+                            ToolTipService.ToolTip="Custom color">
+                            <FontIcon FontSize="12" Glyph="&#xE790;" />
+                            <Button.Flyout>
+                                <Flyout
+                                    Closed="ColorFlyout_Closed"
+                                    Opening="ColorFlyout_Opening"
+                                    ShouldConstrainToRootBounds="False">
+                                    <ColorPicker
+                                        x:Name="CustomColorPicker"
+                                        ColorChanged="ColorPicker_ColorChanged"
+                                        ColorSpectrumShape="Ring"
+                                        IsAlphaEnabled="False"
+                                        IsColorChannelTextInputVisible="False"
+                                        IsColorPreviewVisible="False"
+                                        IsHexInputVisible="False"
+                                        IsMoreButtonVisible="False" />
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+
+                <ComboBox
+                    HorizontalAlignment="Stretch"
+                    Header="Scene"
+                    ItemsSource="{x:Bind Bulb.Scenes, Mode=OneWay}"
+                    PlaceholderText="None"
+                    SelectedIndex="{x:Bind Bulb.SceneIndex, Mode=OneWay}"
+                    SelectionChanged="Scene_SelectionChanged" />
+
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    IsTextSelectionEnabled="True"
+                    Style="{StaticResource CaptionTextBlockStyle}">
+                    <Run Text="{x:Bind Bulb.ModuleName, Mode=OneWay}" />
+                    <Run Text="·" />
+                    <Run Text="{x:Bind Bulb.Mac}" />
+                </TextBlock>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
