@@ -115,7 +115,13 @@ public sealed partial class MainViewModel : ObservableObject
         if (IsScanning)
             return;
 
-        await Task.WhenAll(Bulbs.ToList().Select(async bulb =>
+        await RefreshAsync(Bulbs.ToList());
+    }
+
+    /// <summary>Re-reads the given bulbs' state.</summary>
+    public static async Task RefreshAsync(IEnumerable<Bulb> bulbs)
+    {
+        await Task.WhenAll(bulbs.Select(async bulb =>
         {
             if (await WizClient.RequestAsync(bulb.Ip, "getPilot") is JsonObject pilot)
                 bulb.ApplyPilot(pilot);
@@ -123,6 +129,27 @@ public sealed partial class MainViewModel : ObservableObject
                 bulb.IsReachable = false;
         }));
     }
+
+    /// <summary>Raised after a group or custom button is deleted, so tray icons bound to it can go too.</summary>
+    public event Action<TrayTargetKind, string>? TargetDeleted;
+
+    /// <summary>The bulbs a tray icon target covers, or empty if the target is gone.</summary>
+    public List<Bulb> ResolveBulbs(TrayTargetKind kind, string targetId) => kind switch
+    {
+        TrayTargetKind.Light => [.. Bulbs.Where(b => string.Equals(b.Mac, targetId, StringComparison.OrdinalIgnoreCase))],
+        TrayTargetKind.Group => Groups.FirstOrDefault(g => g.Id == targetId) is BulbGroup group
+            ? [.. Bulbs.Where(b => group.Macs.Contains(b.Mac))]
+            : [],
+        _ => [],
+    };
+
+    /// <summary>The user-facing name of a tray icon target, or null if it no longer exists.</summary>
+    public string? TargetName(TrayTargetKind kind, string targetId) => kind switch
+    {
+        TrayTargetKind.Light => Bulbs.FirstOrDefault(b => string.Equals(b.Mac, targetId, StringComparison.OrdinalIgnoreCase))?.DisplayName,
+        TrayTargetKind.Group => Groups.FirstOrDefault(g => g.Id == targetId)?.Name,
+        _ => Actions.FirstOrDefault(a => a.Id == targetId)?.Name,
+    };
 
     [RelayCommand]
     private void AllOn() => SetAll(true);
@@ -197,6 +224,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         Actions.Remove(action);
         SaveActions();
+        TargetDeleted?.Invoke(TrayTargetKind.Action, action.Id);
     }
 
     /// <summary>Applies the action to every light it covers.</summary>
@@ -263,6 +291,7 @@ public sealed partial class MainViewModel : ObservableObject
         SaveGroups();
         if (actionsChanged)
             SaveActions();
+        TargetDeleted?.Invoke(TrayTargetKind.Group, group.Id);
     }
 
     private BulbGroup CreateGroupModel(string id, string name, IEnumerable<string> macs)

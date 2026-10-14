@@ -141,6 +141,9 @@ public sealed partial class TrayPopupWindow : WindowEx
         _page.OnPopupShown();
     }
 
+    /// <summary>Shows the tray icon editor for an existing icon (the popup must already be open).</summary>
+    public void EditTrayIcon(SavedTrayIcon saved) => _page.ShowTrayIconEditor(saved, isNew: false);
+
     public void HidePopup()
     {
         _hideTimer.Stop();

@@ -87,11 +87,20 @@ public partial class App : Application
             (_, _) => _dispatcher.TryEnqueue(() => GetPopup().ShowPopup()), null, Timeout.Infinite, executeOnlyOnce: false);
 
         _trayIcon = new TrayIcon(1, TrayIconPath, "TrayWiz");
-        _trayIcon.Selected += (_, _) => GetPopup().Toggle(DateTime.UtcNow);
+        _trayIcon.Selected += (sender, _) =>
+        {
+            WindowPlacementService.SetTrayIconSource(sender);
+            GetPopup().Toggle(DateTime.UtcNow);
+        };
         _trayIcon.ContextMenu += TrayIcon_ContextMenu;
         _trayIcon.IsVisible = true;
         WindowPlacementService.SetTrayIconSource(_trayIcon);
-        SystemThemeService.Changed += (_, _) => _dispatcher?.TryEnqueue(() => _trayIcon?.SetIcon(TrayIconPath));
+        TrayIcons = new TrayIconManager(_dispatcher, ShowPopupAt, EditTrayIcon);
+        SystemThemeService.Changed += (_, _) => _dispatcher?.TryEnqueue(() =>
+        {
+            _trayIcon?.SetIcon(TrayIconPath);
+            TrayIcons?.RefreshTheme();
+        });
         _ = RefreshStartupStateAsync();
 
         // Start discovery right away so the list is ready by the first click.
@@ -117,8 +126,25 @@ public partial class App : Application
         }
     }
 
+    /// <summary>The icons the user added for individual lights, groups and buttons.</summary>
+    internal TrayIconManager? TrayIcons { get; private set; }
+
+    /// <summary>Opens the popup against the given icon, so it appears next to the one that was clicked.</summary>
+    private void ShowPopupAt(TrayIcon icon)
+    {
+        WindowPlacementService.SetTrayIconSource(icon);
+        GetPopup().ShowPopup();
+    }
+
+    private void EditTrayIcon(SavedTrayIcon saved)
+    {
+        TrayPopupWindow popup = GetPopup();
+        popup.ShowPopup();
+        popup.EditTrayIcon(saved);
+    }
+
     // A white glyph disappears on a light taskbar, which follows the Windows theme, not the app theme.
-    private static string TrayIconPath => Path.Combine(
+    internal static string TrayIconPath => Path.Combine(
         AppContext.BaseDirectory, "Assets", SystemThemeService.IsLight ? "AppIcon-dark.ico" : "AppIcon.ico");
 
     private async Task RefreshStartupStateAsync() => _startupState = await StartupService.GetStateAsync();
@@ -144,7 +170,7 @@ public partial class App : Application
         MenuFlyout menu = new();
 
         MenuFlyoutItem open = new() { Text = "Open TrayWiz", Icon = new FontIcon { Glyph = "" } };
-        open.Click += (_, _) => GetPopup().ShowPopup();
+        open.Click += (_, _) => ShowPopupAt(sender);
         menu.Items.Add(open);
         menu.Items.Add(new MenuFlyoutSeparator());
 
@@ -180,6 +206,8 @@ public partial class App : Application
         _isShuttingDown = true;
 
         _popup?.CloseWindow();
+        TrayIcons?.Dispose();
+        TrayIcons = null;
         if (_trayIcon is not null)
         {
             _trayIcon.IsVisible = false;
