@@ -52,3 +52,10 @@ _ReSharper*/
 # Generated files
 Generated\ Files/
 *_wpftmp.csproj
+
+# Signing certificates and keys: never commit
+*.pfx
+*.cer
+*.snk
+devcert.*
+OAuth.resw

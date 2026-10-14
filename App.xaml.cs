@@ -36,6 +36,21 @@ public partial class App : Application
         // The popup is hidden, not closed, but make sure the app never quits just because
         // no window is showing.
         DispatcherShutdownMode = DispatcherShutdownMode.OnExplicitShutdown;
+        UnhandledException += (_, e) => LogCrash(e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => LogCrash(e.ExceptionObject as Exception);
+    }
+
+    private static void LogCrash(Exception? ex)
+    {
+        try
+        {
+            string path = Path.Combine(Path.GetTempPath(), "TrayWiz-crash.log");
+            File.AppendAllText(path, $"[{DateTime.Now:O}] {ex}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Never throw from the crash logger.
+        }
     }
 
     public static new App Current => (App)Application.Current;
@@ -82,6 +97,24 @@ public partial class App : Application
         // Start discovery right away so the list is ready by the first click.
         _ = MainViewModel.Instance.ScanAsync();
         MemoryService.ReleaseIdle(StartupTrimDelay);
+
+        // Opening the popup tells a user who just launched the app where it lives. A silent
+        // start with Windows stays in the tray.
+        if (!IsStartupTaskLaunch())
+            _dispatcher.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () => GetPopup().ShowPopup());
+    }
+
+    private static bool IsStartupTaskLaunch()
+    {
+        try
+        {
+            return Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs().Kind
+                == Microsoft.Windows.AppLifecycle.ExtendedActivationKind.StartupTask;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     // A white glyph disappears on a light taskbar, which follows the Windows theme, not the app theme.

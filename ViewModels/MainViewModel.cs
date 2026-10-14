@@ -70,8 +70,7 @@ public sealed partial class MainViewModel : ObservableObject
             HashSet<string> seenMacs = new(StringComparer.OrdinalIgnoreCase);
             await Task.WhenAll(found.Select(async pair =>
             {
-                string? mac = pair.Value["mac"]?.GetValue<string>();
-                if (mac is null)
+                if (pair.Value["mac"] is not JsonValue macValue || !macValue.TryGetValue(out string? mac) || string.IsNullOrEmpty(mac))
                     return;
                 lock (seenMacs) seenMacs.Add(mac);
                 await AddOrUpdateAsync(mac, pair.Key, pair.Value);

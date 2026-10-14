@@ -116,6 +116,18 @@ public sealed partial class Bulb : ObservableObject
 
     public void ApplySystemConfig(JsonObject? systemConfig, JsonObject? modelConfig)
     {
+        try
+        {
+            ApplySystemConfigCore(systemConfig, modelConfig);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException or OverflowException)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Bulb] Ignored malformed config from {Ip}: {ex.Message}");
+        }
+    }
+
+    private void ApplySystemConfigCore(JsonObject? systemConfig, JsonObject? modelConfig)
+    {
         if (systemConfig?["moduleName"]?.GetValue<string>() is string module)
             ModuleName = module;
 
@@ -132,7 +144,23 @@ public sealed partial class Bulb : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Applies a getPilot reply. The reply comes from an unauthenticated device on the LAN, so a
+    /// field of the wrong type is ignored instead of taking the app down.
+    /// </summary>
     public void ApplyPilot(JsonObject pilot)
+    {
+        try
+        {
+            ApplyPilotCore(pilot);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException or OverflowException)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Bulb] Ignored malformed pilot from {Ip}: {ex.Message}");
+        }
+    }
+
+    private void ApplyPilotCore(JsonObject pilot)
     {
         IsReachable = true;
         if (pilot["state"] is JsonNode state)
@@ -254,8 +282,11 @@ public sealed partial class Bulb : ObservableObject
         JsonObject p = [];
         foreach (string key in new[] { "state", "dimming", "temp", "r", "g", "b", "c", "w", "sceneId", "speed" })
         {
-            if (pilot[key] is JsonNode value && !(key == "sceneId" && value.GetValue<int>() == 0))
-                p[key] = value.DeepClone();
+            if (pilot[key] is not JsonNode value)
+                continue;
+            if (key == "sceneId" && !(value is JsonValue id && id.TryGetValue(out int sceneId) && sceneId != 0))
+                continue;
+            p[key] = value.DeepClone();
         }
         return p;
     }

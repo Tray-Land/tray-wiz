@@ -88,7 +88,10 @@ public static class WizClient
     public static async Task<JsonObject?> RequestAsync(string ip, string method, JsonObject? parameters = null, CancellationToken ct = default)
     {
         byte[] payload = Encode(method, parameters);
-        IPEndPoint endpoint = new(IPAddress.Parse(ip), Port);
+        // The IP can come from a hand-edited bulbs.json.
+        if (!IPAddress.TryParse(ip, out IPAddress? address))
+            return null;
+        IPEndPoint endpoint = new(address, Port);
 
         for (int attempt = 0; attempt < RequestAttempts; attempt++)
         {
@@ -179,10 +182,13 @@ public static class WizClient
 
     private static async Task SendRawAsync(string ip, string method, JsonObject? parameters)
     {
+        if (!IPAddress.TryParse(ip, out IPAddress? address))
+            return;
+
         try
         {
             using UdpClient udp = new(new IPEndPoint(IPAddress.Any, 0));
-            await udp.SendAsync(Encode(method, parameters), new IPEndPoint(IPAddress.Parse(ip), Port)).ConfigureAwait(false);
+            await udp.SendAsync(Encode(method, parameters), new IPEndPoint(address, Port)).ConfigureAwait(false);
         }
         catch (SocketException) { }
     }
