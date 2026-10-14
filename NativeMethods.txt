@@ -6,6 +6,7 @@ GetAncestor
 GetClassName
 GetCurrentProcess
 GetDpiForMonitor
+GetDoubleClickTime
 GetDpiForWindow
 GetForegroundWindow
 GetWindowLong
@@ -18,3 +19,5 @@ SetProcessWorkingSetSize
 SetWindowLong
 SHAppBarMessage
 Shell_NotifyIconGetRect
+GetDpiForSystem
+GetSystemMetricsForDpi
