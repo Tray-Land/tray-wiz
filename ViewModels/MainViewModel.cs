@@ -20,13 +20,26 @@ public sealed partial class MainViewModel : ObservableObject
 
         foreach (SavedGroup saved in BulbStore.LoadGroups())
             Groups.Add(CreateGroupModel(saved.Id, saved.Name, saved.Macs));
+
+        foreach (SavedAction saved in BulbStore.LoadActions())
+        {
+            LightAction action = new(saved);
+            Actions.Add(action);
+            (GroupOf(action)?.Tiles ?? Ungrouped).Add(action);
+        }
+        Sort(Ungrouped);
+        foreach (BulbGroup group in Groups)
+            Sort(group.Tiles);
     }
 
     /// <summary>Every known bulb, grouped or not.</summary>
     public ObservableCollection<Bulb> Bulbs { get; } = [];
 
-    /// <summary>Bulbs that aren't in any group, shown above the groups.</summary>
-    public ObservableCollection<Bulb> Ungrouped { get; } = [];
+    /// <summary>Custom actions, grouped or not.</summary>
+    public ObservableCollection<LightAction> Actions { get; } = [];
+
+    /// <summary>Tiles (bulbs and actions) that aren't in any group, shown above the groups.</summary>
+    public ObservableCollection<TileItem> Ungrouped { get; } = [];
 
     public ObservableCollection<BulbGroup> Groups { get; } = [];
 
@@ -123,28 +136,84 @@ public sealed partial class MainViewModel : ObservableObject
             bulb.SetOn(on);
     }
 
-    public BulbGroup? GroupOf(Bulb bulb) => Groups.FirstOrDefault(g => g.Macs.Contains(bulb.Mac));
+    public BulbGroup? GroupOf(TileItem tile) => Groups.FirstOrDefault(g => g.Macs.Contains(tile.Key));
 
-    /// <summary>Moves a bulb into <paramref name="target"/>, or out of its group when null.</summary>
-    public void MoveToGroup(Bulb bulb, BulbGroup? target)
+    /// <summary>Moves a tile into <paramref name="target"/>, or out of its group when null.</summary>
+    public void MoveToGroup(TileItem tile, BulbGroup? target)
     {
-        BulbGroup? current = GroupOf(bulb);
+        BulbGroup? current = GroupOf(tile);
         if (current == target)
             return;
 
         if (current is null)
         {
-            Ungrouped.Remove(bulb);
+            Ungrouped.Remove(tile);
         }
         else
         {
-            current.Macs.Remove(bulb.Mac);
-            current.Bulbs.Remove(bulb);
+            current.Macs.Remove(tile.Key);
+            current.Tiles.Remove(tile);
         }
 
-        target?.Macs.Add(bulb.Mac);
-        InsertSorted(target?.Bulbs ?? Ungrouped, bulb);
+        target?.Macs.Add(tile.Key);
+        InsertSorted(target?.Tiles ?? Ungrouped, tile);
         SaveGroups();
+    }
+
+    /// <summary>Adds a new action, or updates the one with the same id.</summary>
+    public void SaveAction(SavedAction saved)
+    {
+        LightAction? existing = Actions.FirstOrDefault(a => a.Id == saved.Id);
+        if (existing is not null)
+        {
+            existing.Update(saved);
+            ObservableCollection<TileItem> home = GroupOf(existing)?.Tiles ?? Ungrouped;
+            home.Remove(existing);
+            InsertSorted(home, existing);
+        }
+        else
+        {
+            LightAction action = new(saved);
+            Actions.Add(action);
+            InsertSorted(Ungrouped, action);
+        }
+
+        SaveActions();
+    }
+
+    public void DeleteAction(LightAction action)
+    {
+        BulbGroup? group = GroupOf(action);
+        if (group is not null)
+        {
+            group.Macs.Remove(action.Key);
+            group.Tiles.Remove(action);
+            SaveGroups();
+        }
+        else
+        {
+            Ungrouped.Remove(action);
+        }
+
+        Actions.Remove(action);
+        SaveActions();
+    }
+
+    /// <summary>Applies the action to every light it covers.</summary>
+    public void RunAction(LightAction action)
+    {
+        SavedAction settings = action.Settings;
+        HashSet<string> macs = new(settings.Macs, StringComparer.OrdinalIgnoreCase);
+        foreach (BulbGroup group in Groups.Where(g => settings.GroupIds.Contains(g.Id)))
+            macs.UnionWith(group.Macs);
+
+        List<Bulb> targets = [.. Bulbs.Where(b => macs.Contains(b.Mac))];
+        foreach (Bulb bulb in targets)
+            bulb.ApplyAction(settings);
+
+        StatusText = targets.Count == 0
+            ? $"{action.Name} · no lights found"
+            : $"{action.Name} · {(targets.Count == 1 ? "1 light" : $"{targets.Count} lights")}" + (WizClient.DryRun ? " · dry run" : "");
     }
 
     public BulbGroup CreateGroup()
@@ -174,11 +243,26 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Deletes the group; its bulbs go back to the ungrouped list.</summary>
     public void DeleteGroup(BulbGroup group)
     {
-        foreach (Bulb bulb in group.Bulbs.ToList())
-            InsertSorted(Ungrouped, bulb);
+        foreach (TileItem tile in group.Tiles.ToList())
+            InsertSorted(Ungrouped, tile);
+
+        // Actions aimed at the group keep working: they now name its bulbs directly.
+        bool actionsChanged = false;
+        foreach (LightAction action in Actions.Where(a => a.Settings.GroupIds.Contains(group.Id)))
+        {
+            action.Settings.GroupIds.Remove(group.Id);
+            foreach (string mac in group.Macs.Where(m => !m.StartsWith(LightAction.KeyPrefix, StringComparison.Ordinal)))
+            {
+                if (!action.Settings.Macs.Contains(mac, StringComparer.OrdinalIgnoreCase))
+                    action.Settings.Macs.Add(mac);
+            }
+            actionsChanged = true;
+        }
 
         Groups.Remove(group);
         SaveGroups();
+        if (actionsChanged)
+            SaveActions();
     }
 
     private BulbGroup CreateGroupModel(string id, string name, IEnumerable<string> macs)
@@ -193,6 +277,8 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private void SaveGroups() => BulbStore.SaveGroups(Groups.Select(g => g.ToSaved()));
+
+    private void SaveActions() => BulbStore.SaveActions(Actions.Select(a => a.Settings));
 
     private async Task AddOrUpdateAsync(string mac, string ip, JsonObject pilot)
     {
@@ -229,7 +315,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         bulb.PropertyChanged += Bulb_PropertyChanged;
         Bulbs.Add(bulb);
-        (GroupOf(bulb)?.Bulbs ?? Ungrouped).Add(bulb);
+        (GroupOf(bulb)?.Tiles ?? Ungrouped).Add(bulb);
         OnPropertyChanged(nameof(EmptyStateVisibility));
     }
 
@@ -244,26 +330,33 @@ public sealed partial class MainViewModel : ObservableObject
         Sort(Bulbs);
         Sort(Ungrouped);
         foreach (BulbGroup group in Groups)
-            Sort(group.Bulbs);
+            Sort(group.Tiles);
     }
 
-    private static void Sort(ObservableCollection<Bulb> bulbs)
+    // Actions come first, then bulbs, each by name.
+    private static int CompareTiles(TileItem a, TileItem b)
     {
-        List<Bulb> sorted = [.. bulbs.OrderBy(b => b.DisplayName, StringComparer.CurrentCultureIgnoreCase)];
+        int byKind = (a is LightAction ? 0 : 1).CompareTo(b is LightAction ? 0 : 1);
+        return byKind != 0 ? byKind : StringComparer.CurrentCultureIgnoreCase.Compare(a.DisplayName, b.DisplayName);
+    }
+
+    private static void Sort<T>(ObservableCollection<T> tiles) where T : TileItem
+    {
+        List<T> sorted = [.. tiles.Order(Comparer<T>.Create(CompareTiles))];
         for (int i = 0; i < sorted.Count; i++)
         {
-            int current = bulbs.IndexOf(sorted[i]);
+            int current = tiles.IndexOf(sorted[i]);
             if (current != i)
-                bulbs.Move(current, i);
+                tiles.Move(current, i);
         }
     }
 
-    private static void InsertSorted(ObservableCollection<Bulb> bulbs, Bulb bulb)
+    private static void InsertSorted<T>(ObservableCollection<T> tiles, T tile) where T : TileItem
     {
         int index = 0;
-        while (index < bulbs.Count && StringComparer.CurrentCultureIgnoreCase.Compare(bulbs[index].DisplayName, bulb.DisplayName) <= 0)
+        while (index < tiles.Count && CompareTiles(tiles[index], tile) <= 0)
             index++;
-        bulbs.Insert(index, bulb);
+        tiles.Insert(index, tile);
     }
 
     private void SaveAll()

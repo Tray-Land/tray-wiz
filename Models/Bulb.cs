@@ -19,7 +19,7 @@ public enum LightMode
 /// controls can coerce and write back values when containers are recycled, so a property
 /// setter must never be able to change a real light.)
 /// </summary>
-public sealed partial class Bulb : ObservableObject
+public sealed partial class Bulb : TileItem
 {
     private LightMode _mode = LightMode.White;
 
@@ -74,7 +74,9 @@ public sealed partial class Bulb : ObservableObject
     [NotifyPropertyChangedFor(nameof(SwatchColor))]
     public partial int SceneIndex { get; set; } = -1;
 
-    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? $"Bulb {Mac[^4..].ToUpperInvariant()}" : Name!;
+    public override string Key => Mac;
+
+    public override string DisplayName => string.IsNullOrWhiteSpace(Name) ? $"Bulb {Mac[^4..].ToUpperInvariant()}" : Name!;
 
     // Module names look like ESP25_SHRGB_01 (color + white), ESP25_SHTW_01 (tunable white),
     // ESP25_SHDW_01 (dimmable only).
@@ -244,6 +246,64 @@ public sealed partial class Bulb : ObservableObject
             return;
         SceneIndex = index;
         SendLighting(new JsonObject { ["sceneId"] = Scenes[index].Id, ["dimming"] = (int)Brightness }, LightMode.Scene);
+    }
+
+    /// <summary>
+    /// Applies a custom action as a single command. Settings this bulb can't do (color on a
+    /// white-only bulb, say) are skipped, so one action can span mixed bulbs.
+    /// </summary>
+    public void ApplyAction(SavedAction action)
+    {
+        if (action.Power == false)
+        {
+            SetOn(false);
+            return;
+        }
+
+        JsonObject parameters = [];
+        LightMode? modeChange = null;
+
+        if (action.Brightness is int brightness)
+        {
+            Brightness = Math.Clamp(brightness, 10, 100);
+            parameters["dimming"] = (int)Brightness;
+        }
+
+        switch (action.Look)
+        {
+            case ActionLook.White when action.Temperature is int kelvin && SupportsTemperature:
+                Temperature = Math.Clamp(kelvin, MinTemperature, MaxTemperature);
+                parameters["temp"] = (int)Temperature;
+                modeChange = LightMode.White;
+                break;
+            case ActionLook.Color when IsRgb && TryParseHex(action.Color, out Color color):
+                Color = color;
+                parameters["r"] = color.R;
+                parameters["g"] = color.G;
+                parameters["b"] = color.B;
+                modeChange = LightMode.Color;
+                break;
+            case ActionLook.Scene when action.SceneId is int sceneId && IndexOfScene(sceneId) is int index and >= 0:
+                SceneIndex = index;
+                parameters["sceneId"] = sceneId;
+                modeChange = LightMode.Scene;
+                break;
+        }
+
+        if (parameters.Count > 0)
+            SendLighting(parameters, modeChange);
+        else if (action.Power == true)
+            SetOn(true);
+    }
+
+    public static bool TryParseHex(string? hex, out Color color)
+    {
+        color = default;
+        if (hex is not { Length: 6 } || !uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out uint rgb))
+            return false;
+
+        color = Color.FromArgb(255, (byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+        return true;
     }
 
     /// <summary>Blinks the bulb a few times so the user can tell which one it is, then restores it.</summary>
