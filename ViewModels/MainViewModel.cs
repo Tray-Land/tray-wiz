@@ -76,6 +76,13 @@ public sealed partial class MainViewModel : ObservableObject
                 await AddOrUpdateAsync(mac, pair.Key, pair.Value);
             }));
 
+            // Remember bulbs that didn't answer (e.g. their fixture is switched off).
+            foreach (SavedBulb saved in _saved.Values.ToList())
+            {
+                if (!Bulbs.Any(b => string.Equals(b.Mac, saved.Mac, StringComparison.OrdinalIgnoreCase)))
+                    AddBulb(CreateOfflineBulb(saved));
+            }
+
             foreach (Bulb missing in Bulbs.Where(b => !seenMacs.Contains(b.Mac)))
                 missing.IsReachable = false;
 
@@ -190,24 +197,36 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task AddOrUpdateAsync(string mac, string ip, JsonObject pilot)
     {
         Bulb? existing = Bulbs.FirstOrDefault(b => string.Equals(b.Mac, mac, StringComparison.OrdinalIgnoreCase));
-        if (existing is not null)
-        {
-            existing.Ip = ip;
-            existing.ApplyPilot(pilot);
-            return;
-        }
-
-        Bulb bulb = new(mac, ip);
-        if (_saved.TryGetValue(mac, out SavedBulb? saved))
-            bulb.Name = saved.Name;
+        Bulb bulb = existing ?? new(mac, ip);
+        if (existing is null && _saved.TryGetValue(mac, out SavedBulb? saved))
+            bulb.ApplySaved(saved);
 
         // Capabilities must be in place before state is applied and before the bulb reaches
         // the UI, so bound sliders/pickers never coerce a value and write it back to the bulb.
-        Task<JsonObject?> system = WizClient.RequestAsync(ip, "getSystemConfig");
-        Task<JsonObject?> model = WizClient.RequestAsync(ip, "getModelConfig");
-        bulb.ApplySystemConfig(await system, await model);
+        if (existing is null || existing.ModuleName.Length == 0)
+        {
+            Task<JsonObject?> system = WizClient.RequestAsync(ip, "getSystemConfig");
+            Task<JsonObject?> model = WizClient.RequestAsync(ip, "getModelConfig");
+            bulb.ApplySystemConfig(await system, await model);
+        }
+
+        bulb.Ip = ip;
         bulb.ApplyPilot(pilot);
 
+        if (existing is null)
+            AddBulb(bulb);
+    }
+
+    private static Bulb CreateOfflineBulb(SavedBulb saved)
+    {
+        Bulb bulb = new(saved.Mac, saved.LastIp ?? "");
+        bulb.ApplySaved(saved);
+        bulb.IsReachable = false;
+        return bulb;
+    }
+
+    private void AddBulb(Bulb bulb)
+    {
         bulb.PropertyChanged += Bulb_PropertyChanged;
         Bulbs.Add(bulb);
         (GroupOf(bulb)?.Bulbs ?? Ungrouped).Add(bulb);
