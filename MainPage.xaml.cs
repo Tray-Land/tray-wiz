@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using TrayWiz.Controls;
 using TrayWiz.Models;
+using TrayWiz.Services;
 using TrayWiz.ViewModels;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
@@ -127,6 +128,22 @@ public sealed partial class MainPage : Page
         editor.Saved += (_, saved) =>
         {
             ViewModel.SaveAction(saved);
+            ShowHome(restoreFocus: false);
+        };
+        ShowInDetailHost(editor, null);
+    }
+
+    /// <summary>Opens the tray icon editor for a new icon on the given target.</summary>
+    private void AddTrayIcon(TrayTargetKind kind, string targetId, string name, string? glyph) =>
+        ShowTrayIconEditor(TrayIconManager.CreateDefault(kind, targetId, name, glyph), isNew: true);
+
+    public void ShowTrayIconEditor(SavedTrayIcon saved, bool isNew)
+    {
+        TrayIconEditorView editor = new(ViewModel, saved, isNew);
+        editor.BackRequested += (_, _) => ShowHome(restoreFocus: false);
+        editor.Saved += (_, result) =>
+        {
+            App.Current.TrayIcons?.Save(result);
             ShowHome(restoreFocus: false);
         };
         ShowInDetailHost(editor, null);
@@ -298,9 +315,19 @@ public sealed partial class MainPage : Page
             menu.Items.Add(remove);
         }
 
+        menu.Items.Add(new MenuFlyoutSeparator());
+        MenuFlyoutItem addIcon = new() { Text = "Add new tray icon", Icon = new FontIcon { Glyph = "" } };
+        addIcon.Click += (_, _) =>
+        {
+            if (bulb is LightAction a)
+                AddTrayIcon(TrayTargetKind.Action, a.Id, a.Name, a.Glyph);
+            else if (bulb is Bulb b)
+                AddTrayIcon(TrayTargetKind.Light, b.Mac, b.DisplayName, null);
+        };
+        menu.Items.Add(addIcon);
+
         if (bulb is LightAction doomed)
         {
-            menu.Items.Add(new MenuFlyoutSeparator());
             MenuFlyoutItem delete = new() { Text = "Delete button", Icon = new FontIcon { Glyph = "" } };
             delete.Click += (_, _) => ViewModel.DeleteAction(doomed);
             menu.Items.Add(delete);
@@ -330,9 +357,13 @@ public sealed partial class MainPage : Page
         MenuFlyoutItem moveDown = new() { Text = "Move down", Icon = new FontIcon { Glyph = "" }, IsEnabled = index < ViewModel.Groups.Count - 1 };
         moveDown.Click += (_, _) => MoveGroupAnimated(group, 1);
 
+        MenuFlyoutItem addIcon = new() { Text = "Add new tray icon", Icon = new FontIcon { Glyph = "" } };
+        addIcon.Click += (_, _) => AddTrayIcon(TrayTargetKind.Group, group.Id, group.Name, null);
+
         menu.Items.Add(rename);
         menu.Items.Add(moveUp);
         menu.Items.Add(moveDown);
+        menu.Items.Add(addIcon);
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(delete);
         menu.ShowAt(button);
