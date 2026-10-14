@@ -189,7 +189,28 @@ public sealed partial class Bulb : ObservableObject
         OnPropertyChanged(nameof(SwatchColor));
     }
 
-    public SavedBulb ToSaved() => new() { Mac = Mac, Name = Name, LastIp = Ip };
+    public SavedBulb ToSaved() => new()
+    {
+        Mac = Mac,
+        Name = Name,
+        LastIp = Ip,
+        ModuleName = ModuleName,
+        MinTemperature = MinTemperature,
+        MaxTemperature = MaxTemperature,
+    };
+
+    /// <summary>Restores remembered name and capabilities for a bulb that hasn't answered yet.</summary>
+    public void ApplySaved(SavedBulb saved)
+    {
+        Name = saved.Name;
+        if (!string.IsNullOrEmpty(saved.ModuleName))
+            ModuleName = saved.ModuleName;
+        if (saved.MinTemperature is > 0 && saved.MaxTemperature > saved.MinTemperature)
+        {
+            MinTemperature = saved.MinTemperature.Value;
+            MaxTemperature = saved.MaxTemperature.Value;
+        }
+    }
 
     public void SetOn(bool on)
     {

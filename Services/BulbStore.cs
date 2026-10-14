@@ -9,6 +9,11 @@ public sealed class SavedBulb
     public string Mac { get; set; } = "";
     public string? Name { get; set; }
     public string? LastIp { get; set; }
+
+    /// <summary>Capabilities, kept so a bulb can be shown while it is switched off at the fixture.</summary>
+    public string? ModuleName { get; set; }
+    public double? MinTemperature { get; set; }
+    public double? MaxTemperature { get; set; }
 }
 
 public sealed class SavedGroup
