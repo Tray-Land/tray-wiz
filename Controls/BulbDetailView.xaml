@@ -13,23 +13,6 @@
         <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="BackAccelerator_Invoked" />
     </UserControl.KeyboardAccelerators>
 
-    <UserControl.Resources>
-        <Style x:Key="SwatchButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="28" />
-            <Setter Property="Height" Value="28" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Ellipse
-                            Fill="{TemplateBinding Background}"
-                            Stroke="{ThemeResource ControlStrokeColorDefaultBrush}"
-                            StrokeThickness="1" />
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </UserControl.Resources>
-
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

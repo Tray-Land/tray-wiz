@@ -26,7 +26,7 @@ public sealed partial class MainPage : Page
     private Control? _detailOrigin;
 
     // The tile being dragged. Drags only ever happen within this page, so the payload is kept here.
-    private Bulb? _draggedBulb;
+    private TileItem? _draggedTile;
 
     // Where the left button went down on a tile; null when no drag can start.
     private Windows.Foundation.Point? _dragOrigin;
@@ -109,9 +109,33 @@ public sealed partial class MainPage : Page
         // A new view per bulb: rebinding existing sliders to another bulb could clamp and send values.
         BulbDetailView detail = new(bulb);
         detail.BackRequested += (_, _) => ShowHome(restoreFocus: true);
+        ShowInDetailHost(detail, origin);
+    }
 
+    private void ActionTile_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: LightAction action })
+            ViewModel.RunAction(action);
+    }
+
+    private void NewButton_Click(object sender, RoutedEventArgs e) => ShowEditor(null);
+
+    private void ShowEditor(LightAction? action)
+    {
+        ActionEditorView editor = new(ViewModel, action);
+        editor.BackRequested += (_, _) => ShowHome(restoreFocus: false);
+        editor.Saved += (_, saved) =>
+        {
+            ViewModel.SaveAction(saved);
+            ShowHome(restoreFocus: false);
+        };
+        ShowInDetailHost(editor, null);
+    }
+
+    private void ShowInDetailHost(UIElement view, Control? origin)
+    {
         _detailOrigin = origin;
-        DetailHost.Content = detail;
+        DetailHost.Content = view;
         DetailHost.Visibility = Visibility.Visible;
         HomeView.Visibility = Visibility.Collapsed;
     }
@@ -169,22 +193,22 @@ public sealed partial class MainPage : Page
 
     private void Tile_DragStarting(UIElement sender, DragStartingEventArgs args)
     {
-        if (sender is not FrameworkElement { DataContext: Bulb bulb })
+        if (sender is not FrameworkElement { DataContext: TileItem tile })
         {
             args.Cancel = true;
             return;
         }
 
-        _draggedBulb = bulb;
-        args.Data.SetText(bulb.DisplayName);
+        _draggedTile = tile;
+        args.Data.SetText(tile.DisplayName);
         args.Data.RequestedOperation = DataPackageOperation.Move;
     }
 
-    private void Tile_DropCompleted(UIElement sender, DropCompletedEventArgs args) => _draggedBulb = null;
+    private void Tile_DropCompleted(UIElement sender, DropCompletedEventArgs args) => _draggedTile = null;
 
     private void Group_DragEnter(object sender, DragEventArgs e)
     {
-        if (_draggedBulb is not null && sender is Panel panel)
+        if (_draggedTile is not null && sender is Panel panel)
             panel.Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"];
     }
 
@@ -194,10 +218,10 @@ public sealed partial class MainPage : Page
     {
         // Handled so the surrounding "remove from group" target doesn't override this one.
         e.Handled = true;
-        if (_draggedBulb is null || sender is not FrameworkElement { DataContext: BulbGroup group })
+        if (_draggedTile is null || sender is not FrameworkElement { DataContext: BulbGroup group })
             return;
 
-        bool isMove = ViewModel.GroupOf(_draggedBulb) != group;
+        bool isMove = ViewModel.GroupOf(_draggedTile) != group;
         e.AcceptedOperation = isMove ? DataPackageOperation.Move : DataPackageOperation.None;
         e.DragUIOverride.Caption = isMove ? $"Move to {group.Name}" : "";
         e.DragUIOverride.IsGlyphVisible = false;
@@ -207,8 +231,8 @@ public sealed partial class MainPage : Page
     {
         e.Handled = true;
         ClearDropHighlight(sender);
-        if (_draggedBulb is not null && sender is FrameworkElement { DataContext: BulbGroup group })
-            ViewModel.MoveToGroup(_draggedBulb, group);
+        if (_draggedTile is not null && sender is FrameworkElement { DataContext: BulbGroup group })
+            ViewModel.MoveToGroup(_draggedTile, group);
     }
 
     private static void ClearDropHighlight(object sender)
@@ -219,7 +243,7 @@ public sealed partial class MainPage : Page
 
     private void Ungrouped_DragOver(object sender, DragEventArgs e)
     {
-        bool isMove = _draggedBulb is not null && ViewModel.GroupOf(_draggedBulb) is not null;
+        bool isMove = _draggedTile is not null && ViewModel.GroupOf(_draggedTile) is not null;
         e.AcceptedOperation = isMove ? DataPackageOperation.Move : DataPackageOperation.None;
         e.DragUIOverride.Caption = isMove ? "Remove from group" : "";
         e.DragUIOverride.IsGlyphVisible = false;
@@ -227,19 +251,26 @@ public sealed partial class MainPage : Page
 
     private void Ungrouped_Drop(object sender, DragEventArgs e)
     {
-        if (_draggedBulb is not null)
-            ViewModel.MoveToGroup(_draggedBulb, null);
+        if (_draggedTile is not null)
+            ViewModel.MoveToGroup(_draggedTile, null);
     }
 
     // Menu equivalent of drag and drop, for keyboard and screen reader users.
     private void Tile_ContextRequested(UIElement sender, ContextRequestedEventArgs args)
     {
-        if (sender is not FrameworkElement { DataContext: Bulb bulb } tile)
+        if (sender is not FrameworkElement { DataContext: TileItem bulb } tile)
             return;
 
         args.Handled = true;
         BulbGroup? current = ViewModel.GroupOf(bulb);
         MenuFlyout menu = new();
+
+        if (bulb is LightAction action)
+        {
+            MenuFlyoutItem edit = new() { Text = "Edit", Icon = new FontIcon { Glyph = "" } };
+            edit.Click += (_, _) => ShowEditor(action);
+            menu.Items.Add(edit);
+        }
 
         MenuFlyoutSubItem moveTo = new() { Text = "Move to group", Icon = new FontIcon { Glyph = "" } };
         foreach (BulbGroup group in ViewModel.Groups.Where(g => g != current))
@@ -265,6 +296,14 @@ public sealed partial class MainPage : Page
             MenuFlyoutItem remove = new() { Text = $"Remove from {current.Name}", Icon = new FontIcon { Glyph = "" } };
             remove.Click += (_, _) => ViewModel.MoveToGroup(bulb, null);
             menu.Items.Add(remove);
+        }
+
+        if (bulb is LightAction doomed)
+        {
+            menu.Items.Add(new MenuFlyoutSeparator());
+            MenuFlyoutItem delete = new() { Text = "Delete button", Icon = new FontIcon { Glyph = "" } };
+            delete.Click += (_, _) => ViewModel.DeleteAction(doomed);
+            menu.Items.Add(delete);
         }
 
         if (args.TryGetPosition(tile, out Windows.Foundation.Point point))

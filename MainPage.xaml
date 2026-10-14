@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:local="using:TrayWiz"
+    xmlns:controls="using:TrayWiz.Controls"
     xmlns:models="using:TrayWiz.Models"
     Background="Transparent"
     IsTabStop="True"
@@ -85,6 +86,42 @@
                     TextWrapping="Wrap" />
             </StackPanel>
         </DataTemplate>
+
+        <!--  A custom action: one button that applies its saved settings to its lights.  -->
+        <DataTemplate x:Key="ActionTileTemplate" x:DataType="models:LightAction">
+            <StackPanel
+                Margin="4,4,4,12"
+                Background="Transparent"
+                ContextRequested="Tile_ContextRequested"
+                DragStarting="Tile_DragStarting"
+                DropCompleted="Tile_DropCompleted"
+                Loaded="Tile_Loaded"
+                Spacing="8"
+                ToolTipService.ToolTip="{x:Bind Name, Mode=OneWay}">
+                <Button
+                    Height="48"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.Name="{x:Bind Name, Mode=OneWay}"
+                    Click="ActionTile_Click">
+                    <FontIcon FontSize="16" Glyph="{x:Bind Glyph, Mode=OneWay}" />
+                </Button>
+
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    AutomationProperties.AccessibilityView="Raw"
+                    MaxLines="2"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind Name, Mode=OneWay}"
+                    TextAlignment="Center"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
+
+        <controls:TileTemplateSelector
+            x:Key="TileTemplateSelector"
+            ActionTemplate="{StaticResource ActionTileTemplate}"
+            BulbTemplate="{StaticResource BulbTileTemplate}" />
     </Page.Resources>
 
     <Grid>
@@ -149,6 +186,11 @@
                         <FontIcon FontSize="16" Glyph="&#xE712;" />
                         <Button.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuFlyoutItem Click="NewButton_Click" Text="New button">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE710;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
                                 <MenuFlyoutItem Click="NewGroup_Click" Text="New group">
                                     <MenuFlyoutItem.Icon>
                                         <FontIcon Glyph="&#xE710;" />
@@ -212,7 +254,7 @@
                 <!--  ItemsControl rather than ItemsRepeater: a handful of bulbs doesn't need virtualization, and never recycling containers means each bulb's controls stay bound to that bulb for life.  -->
                 <StackPanel Width="312" HorizontalAlignment="Center">
                     <ItemsControl
-                        ItemTemplate="{StaticResource BulbTileTemplate}"
+                        ItemTemplateSelector="{StaticResource TileTemplateSelector}"
                         ItemsPanel="{StaticResource TilePanelTemplate}"
                         ItemsSource="{x:Bind ViewModel.Ungrouped}" />
 
@@ -272,9 +314,9 @@
                                         Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
                                     <ItemsControl
-                                        ItemTemplate="{StaticResource BulbTileTemplate}"
+                                        ItemTemplateSelector="{StaticResource TileTemplateSelector}"
                                         ItemsPanel="{StaticResource TilePanelTemplate}"
-                                        ItemsSource="{x:Bind Bulbs}" />
+                                        ItemsSource="{x:Bind Tiles}" />
                                     <TextBlock
                                         Margin="4,12,4,16"
                                         HorizontalAlignment="Center"
