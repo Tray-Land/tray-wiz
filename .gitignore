@@ -59,3 +59,7 @@ Generated\ Files/
 *.snk
 devcert.*
 OAuth.resw
+
+# Release publish profiles are needed by build-msix-for-gh.ps1
+!Properties/PublishProfiles/
+!Properties/PublishProfiles/*.pubxml
