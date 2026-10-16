@@ -21,7 +21,8 @@ namespace TrayWiz.Controls;
 /// </summary>
 public sealed partial class TrayPopupWindow : WindowEx
 {
-    private const int PopupWidth = 360;
+    // Wide enough for three 120 px tiles with spacing (MainPage's tile grid is 384 px plus padding).
+    private const int PopupWidth = 420;
     private const int PopupHeight = 560;
 
     private const int WS_EX_TOOLWINDOW = 0x00000080;

@@ -110,7 +110,7 @@ public sealed partial class Bulb : TileItem
             return _mode switch
             {
                 LightMode.Color => Color,
-                LightMode.Scene => Color.FromArgb(255, 180, 140, 230),
+                LightMode.Scene when SceneIndex >= 0 && SceneIndex < Scenes.Count => Scenes[SceneIndex].Swatch,
                 _ => KelvinToColor(Temperature),
             };
         }
@@ -186,7 +186,14 @@ public sealed partial class Bulb : TileItem
         int index = sceneId > 0 ? IndexOfScene(sceneId) : -1;
         SceneIndex = index;
         if (index >= 0)
+        {
             _mode = LightMode.Scene;
+
+            // A fixed-brightness scene (Night light) leaves dimming out, which would otherwise leave the
+            // last brightness known (100 after startup) showing.
+            if (pilot["dimming"] is null && Scenes[index].Dimming is int fixedDimming)
+                Brightness = fixedDimming;
+        }
 
         OnPropertyChanged(nameof(SwatchColor));
     }
@@ -334,6 +341,11 @@ public sealed partial class Bulb : TileItem
             _mode = mode;
             if (mode != LightMode.Scene)
                 SceneIndex = -1;
+            else if (SceneIndex >= 0 && SceneIndex < Scenes.Count && Scenes[SceneIndex].Dimming is int fixedDimming)
+            {
+                Brightness = fixedDimming;
+                parameters["dimming"] = fixedDimming;
+            }
         }
         OnPropertyChanged(nameof(SwatchColor));
 
@@ -383,7 +395,7 @@ public sealed partial class Bulb : TileItem
     }
 
     // Tanner Helland's blackbody approximation, good enough for a swatch.
-    private static Color KelvinToColor(double kelvin)
+    internal static Color KelvinToColor(double kelvin)
     {
         double t = kelvin / 100.0;
         double r = t <= 66 ? 255 : 329.698727446 * Math.Pow(t - 60, -0.1332047592);

@@ -1,0 +1,343 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="TrayWiz.Controls.RichSplitButton"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TrayWiz.Controls"
+    xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives"
+    MinHeight="84">
+
+    <UserControl.Resources>
+        <!--  Per-instance brushes; UpdateLook sets their colors from TintColor.  -->
+        <SolidColorBrush x:Key="TintBrush" />
+        <SolidColorBrush x:Key="InkBrush" />
+        <SolidColorBrush x:Key="DividerBrush" />
+
+        <!--
+            As in WinUI's SplitButton, the halves are transparent hit targets over separate background
+            layers. Hover and press draw a state layer in the current ink color, so they read on any tint.
+            Shared by Button and ToggleButton, so it carries ToggleButton's Checked* states too.
+        -->
+        <Style x:Key="PartButtonStyle" TargetType="primitives:ButtonBase">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="UseSystemFocusVisuals" Value="True" />
+            <Setter Property="FocusVisualMargin" Value="-3" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="primitives:ButtonBase">
+                        <Grid Background="Transparent" CornerRadius="{TemplateBinding CornerRadius}">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="StateLayer.Opacity" Value="0.06" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="StateLayer.Opacity" Value="0.12" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled" />
+                                    <VisualState x:Name="Checked" />
+                                    <VisualState x:Name="CheckedPointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="StateLayer.Opacity" Value="0.06" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="CheckedPressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="StateLayer.Opacity" Value="0.12" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="CheckedDisabled" />
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+
+                            <Border
+                                x:Name="StateLayer"
+                                Background="{TemplateBinding Foreground}"
+                                Opacity="0" />
+                            <ContentPresenter
+                                Padding="{TemplateBinding Padding}"
+                                HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                AutomationProperties.AccessibilityView="Raw"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                Foreground="{TemplateBinding Foreground}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            A bare track drawn in the ink color. The thumb is zero-width, so the fill runs edge to edge,
+            and it doesn't take input, so every press lands on the track and Slider stays Pressed for the
+            whole drag; the knob only shows in that state. Only the horizontal parts are present (Slider
+            tolerates the missing vertical ones).
+        -->
+        <Style x:Key="TileSliderStyle" TargetType="Slider">
+            <Setter Property="ManipulationMode" Value="None" />
+            <Setter Property="UseSystemFocusVisuals" Value="True" />
+            <Setter Property="FocusVisualMargin" Value="-4,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid>
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="HorizontalTrackRect.Opacity" Value="0.4" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="HorizontalTrackRect.Opacity" Value="0.4" />
+                                            <Setter Target="HorizontalThumb.Opacity" Value="1" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled" />
+                                </VisualStateGroup>
+                                <VisualStateGroup x:Name="FocusEngagementStates">
+                                    <VisualState x:Name="FocusDisengaged" />
+                                    <VisualState x:Name="FocusEngagedHorizontal" />
+                                    <VisualState x:Name="FocusEngagedVertical" />
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+
+                            <Border
+                                x:Name="FocusBorder"
+                                Control.IsTemplateFocusTarget="True"
+                                CornerRadius="{ThemeResource ControlCornerRadius}" />
+                            <Grid x:Name="SliderContainer" Background="Transparent">
+                                <Grid x:Name="HorizontalTemplate">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Rectangle
+                                        x:Name="HorizontalTrackRect"
+                                        Grid.ColumnSpan="3"
+                                        Height="4"
+                                        Fill="{TemplateBinding Foreground}"
+                                        Opacity="0.25"
+                                        RadiusX="2"
+                                        RadiusY="2" />
+                                    <!--  A dot at the start, so the lowest brightness still shows some fill.  -->
+                                    <Rectangle
+                                        Grid.ColumnSpan="3"
+                                        Width="4"
+                                        Height="4"
+                                        HorizontalAlignment="Left"
+                                        Fill="{TemplateBinding Foreground}"
+                                        RadiusX="2"
+                                        RadiusY="2" />
+                                    <Rectangle
+                                        x:Name="HorizontalDecreaseRect"
+                                        Height="4"
+                                        Fill="{TemplateBinding Foreground}"
+                                        RadiusX="2"
+                                        RadiusY="2" />
+                                    <Thumb
+                                        x:Name="HorizontalThumb"
+                                        Grid.Column="1"
+                                        Width="0"
+                                        AutomationProperties.AccessibilityView="Raw"
+                                        DataContext="{TemplateBinding Value}"
+                                        Foreground="{TemplateBinding Foreground}"
+                                        IsHitTestVisible="False"
+                                        Opacity="0">
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <!--  A Canvas doesn't clip, so the knob can be wider than the zero-width thumb.  -->
+                                                <Canvas HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Ellipse
+                                                        Canvas.Left="-8"
+                                                        Canvas.Top="-8"
+                                                        Width="16"
+                                                        Height="16"
+                                                        Fill="{ThemeResource ControlSolidFillColorDefaultBrush}"
+                                                        Stroke="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                                        StrokeThickness="1" />
+                                                    <Ellipse
+                                                        Canvas.Left="-4"
+                                                        Canvas.Top="-4"
+                                                        Width="8"
+                                                        Height="8"
+                                                        Fill="{TemplateBinding Foreground}" />
+                                                </Canvas>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!--
+        The root carries the ink color. Text inherits it; the buttons and slider bind to it, because their
+        default styles set a Foreground that would otherwise win over inheritance.
+    -->
+    <ContentPresenter x:Name="Root" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="PowerStates">
+                <VisualState x:Name="Off" />
+                <VisualState x:Name="On">
+                    <VisualState.Setters>
+                        <Setter Target="Root.Foreground" Value="{StaticResource InkBrush}" />
+                        <Setter Target="PrimaryBackground.Background" Value="{StaticResource TintBrush}" />
+                        <Setter Target="SecondaryBackground.Background" Value="{StaticResource TintBrush}" />
+                        <Setter Target="Divider.Background" Value="{StaticResource DividerBrush}" />
+                    </VisualState.Setters>
+                </VisualState>
+                <!--  High contrast never shows the light's own color; system colors keep the text readable.  -->
+                <VisualState x:Name="OnHighContrast">
+                    <VisualState.Setters>
+                        <Setter Target="Root.Foreground" Value="{ThemeResource SystemColorHighlightTextColorBrush}" />
+                        <Setter Target="PrimaryBackground.Background" Value="{ThemeResource SystemColorHighlightColorBrush}" />
+                        <Setter Target="SecondaryBackground.Background" Value="{ThemeResource SystemColorHighlightColorBrush}" />
+                        <Setter Target="Divider.Background" Value="{ThemeResource SystemColorHighlightTextColorBrush}" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="1" />
+                <ColumnDefinition Width="32" />
+            </Grid.ColumnDefinitions>
+
+            <!--
+                Spans the divider column, so the divider draws over the tint (as in SplitButton). While on, both
+                background layers are lit from GlyphIcon (see GlyphLight).
+            -->
+            <Border
+                x:Name="PrimaryBackground"
+                Grid.ColumnSpan="2"
+                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="1,1,0,1"
+                CornerRadius="8,0,0,8" />
+            <Border
+                x:Name="Divider"
+                Grid.Column="1"
+                Background="{ThemeResource ControlStrokeColorDefaultBrush}" />
+            <Border
+                x:Name="SecondaryBackground"
+                Grid.Column="2"
+                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="0,1,1,1"
+                CornerRadius="0,8,8,0" />
+
+            <!--  Main area: a toggle for a light, a plain button for anything without an on state.  -->
+            <ToggleButton
+                x:Name="PrimaryToggle"
+                x:Load="{x:Bind IsToggle, Mode=OneWay}"
+                AutomationProperties.ItemStatus="{x:Bind Status, Mode=OneWay}"
+                AutomationProperties.Name="{x:Bind Title, Mode=OneWay}"
+                Click="Primary_Click"
+                CornerRadius="8,0,0,8"
+                Foreground="{x:Bind Root.Foreground, Mode=OneWay}"
+                IsChecked="{x:Bind IsOn, Mode=OneWay}"
+                Style="{StaticResource PartButtonStyle}"
+                ToolTipService.ToolTip="{x:Bind Description, Mode=OneWay}" />
+            <Button
+                x:Name="PrimaryButton"
+                x:Load="{x:Bind local:RichSplitButton.Not(IsToggle), Mode=OneWay}"
+                AutomationProperties.ItemStatus="{x:Bind Status, Mode=OneWay}"
+                AutomationProperties.Name="{x:Bind Title, Mode=OneWay}"
+                Click="Primary_Click"
+                CornerRadius="8,0,0,8"
+                Foreground="{x:Bind Root.Foreground, Mode=OneWay}"
+                Style="{StaticResource PartButtonStyle}"
+                ToolTipService.ToolTip="{x:Bind Description, Mode=OneWay}" />
+
+            <!--  The face is drawn over the main button but takes no input, so presses reach the button.  -->
+            <Grid
+                Padding="{x:Bind local:RichSplitButton.FacePadding(IsBrightnessVisible), Mode=OneWay}"
+                IsHitTestVisible="False"
+                RowSpacing="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <FontIcon
+                    x:Name="GlyphIcon"
+                    HorizontalAlignment="Left"
+                    AutomationProperties.AccessibilityView="Raw"
+                    FontSize="16"
+                    Glyph="{x:Bind Glyph, Mode=OneWay}" />
+                <TextBlock
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AccessibilityView="Raw"
+                    Opacity="0.8"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind Status, Mode=OneWay}" />
+                <TextBlock
+                    Grid.Row="1"
+                    VerticalAlignment="Bottom"
+                    AutomationProperties.AccessibilityView="Raw"
+                    FontWeight="SemiBold"
+                    MaxLines="2"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind Title, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="Wrap" />
+            </Grid>
+
+            <!--
+                Brightness sits on top of the main button's bottom edge. Its value only ever arrives OneWay;
+                user changes go out through BrightnessChanged (see Brightness_ValueChanged).
+            -->
+            <Slider
+                x:Name="BrightnessSlider"
+                x:Load="{x:Bind IsBrightnessVisible, Mode=OneWay}"
+                Height="24"
+                Margin="12,0,8,2"
+                VerticalAlignment="Bottom"
+                AutomationProperties.Name="{x:Bind local:RichSplitButton.BrightnessName(Title), Mode=OneWay}"
+                Foreground="{x:Bind Root.Foreground, Mode=OneWay}"
+                LargeChange="20"
+                Maximum="100"
+                Minimum="10"
+                Opacity="{x:Bind local:RichSplitButton.SliderOpacity(IsOn), Mode=OneWay}"
+                SmallChange="10"
+                StepFrequency="1"
+                Style="{StaticResource TileSliderStyle}"
+                Value="{x:Bind Brightness, Mode=OneWay}"
+                ValueChanged="Brightness_ValueChanged" />
+
+            <Button
+                x:Name="SecondaryButton"
+                Grid.Column="2"
+                AutomationProperties.Name="{x:Bind local:RichSplitButton.SecondaryName(Title), Mode=OneWay}"
+                Click="Secondary_Click"
+                CornerRadius="0,8,8,0"
+                Foreground="{x:Bind Root.Foreground, Mode=OneWay}"
+                Style="{StaticResource PartButtonStyle}">
+                <FontIcon FontSize="12" Glyph="&#xE76C;" />
+            </Button>
+        </Grid>
+    </ContentPresenter>
+</UserControl>

@@ -23,8 +23,8 @@ public sealed partial class MainPage : Page
     // How far (in DIPs) the pointer must move over a tile before a press becomes a drag.
     private const double DragThreshold = 8;
 
-    // The tile chevron that opened the current detail view, so focus can return to it.
-    private Control? _detailOrigin;
+    // The tile whose chevron opened the current detail view, so focus can return to it.
+    private RichSplitButton? _detailOrigin;
 
     // The tile being dragged. Drags only ever happen within this page, so the payload is kept here.
     private TileItem? _draggedTile;
@@ -69,12 +69,10 @@ public sealed partial class MainPage : Page
         Bindings?.StopTracking();
     }
 
-    public static Style TileButtonStyle(bool isOn) =>
-        (Style)Application.Current.Resources[isOn ? "AccentButtonStyle" : "DefaultButtonStyle"];
+    public static double TileOpacity(bool isReachable) => isReachable ? 1 : 0.5;
 
-    public static string DetailsName(string displayName) => $"{displayName} settings";
-
-    public static double TileLabelOpacity(bool isReachable) => isReachable ? 1 : 0.5;
+    public static string TileStatus(bool isOn, double brightness, bool isReachable) =>
+        !isReachable ? "Offline" : isOn ? $"{brightness:0}%" : "Off";
 
     public static string GroupOptionsName(string groupName) => $"{groupName} options";
 
@@ -92,20 +90,26 @@ public sealed partial class MainPage : Page
             group.SetAllOn(false);
     }
 
-    // Click only fires for user input, never when the OneWay IsChecked binding updates.
+    // Click and BrightnessChanged only fire for user input, never when the OneWay bindings update.
     private void TilePower_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is ToggleButton { DataContext: Bulb bulb } toggle)
-            bulb.SetOn(toggle.IsChecked == true);
+        if (sender is RichSplitButton { DataContext: Bulb bulb })
+            bulb.SetOn(!bulb.IsOn);
+    }
+
+    private void TileBrightness_Changed(object? sender, double value)
+    {
+        if (sender is RichSplitButton { DataContext: Bulb bulb })
+            bulb.SetBrightness(value);
     }
 
     private void TileDetails_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { DataContext: Bulb bulb } button)
-            ShowDetail(bulb, button);
+        if (sender is RichSplitButton { DataContext: Bulb bulb } tile)
+            ShowDetail(bulb, tile);
     }
 
-    private void ShowDetail(Bulb bulb, Control origin)
+    private void ShowDetail(Bulb bulb, RichSplitButton origin)
     {
         // A new view per bulb: rebinding existing sliders to another bulb could clamp and send values.
         BulbDetailView detail = new(bulb);
@@ -115,8 +119,14 @@ public sealed partial class MainPage : Page
 
     private void ActionTile_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { DataContext: LightAction action })
+        if (sender is RichSplitButton { DataContext: LightAction action })
             ViewModel.RunAction(action);
+    }
+
+    private void ActionEdit_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is RichSplitButton { DataContext: LightAction action })
+            ShowEditor(action);
     }
 
     private void NewButton_Click(object sender, RoutedEventArgs e) => ShowEditor(null);
@@ -156,7 +166,7 @@ public sealed partial class MainPage : Page
         ShowInDetailHost(editor, null);
     }
 
-    private void ShowInDetailHost(UIElement view, Control? origin)
+    private void ShowInDetailHost(UIElement view, RichSplitButton? origin)
     {
         _detailOrigin = origin;
         DetailHost.Content = view;
@@ -174,7 +184,7 @@ public sealed partial class MainPage : Page
         HomeView.Visibility = Visibility.Visible;
 
         if (restoreFocus)
-            _detailOrigin?.Focus(FocusState.Programmatic);
+            _detailOrigin?.FocusSecondary();
         _detailOrigin = null;
     }
 
@@ -191,8 +201,21 @@ public sealed partial class MainPage : Page
 
     private void Tile_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        PointerPoint point = e.GetCurrentPoint((UIElement)sender);
-        _dragOrigin = point.Properties.IsLeftButtonPressed ? point.Position : null;
+        UIElement tile = (UIElement)sender;
+        PointerPoint point = e.GetCurrentPoint(tile);
+        _dragOrigin = point.Properties.IsLeftButtonPressed && !IsWithinSlider(e.OriginalSource, tile) ? point.Position : null;
+    }
+
+    // Dragging a tile's brightness slider must not pick the tile up.
+    private static bool IsWithinSlider(object source, UIElement tile)
+    {
+        for (DependencyObject? element = source as DependencyObject; element is not null && element != tile; element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is Slider)
+                return true;
+        }
+
+        return false;
     }
 
     private void Tile_PointerMoved(object sender, PointerRoutedEventArgs e)

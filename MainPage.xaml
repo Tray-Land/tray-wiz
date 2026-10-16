@@ -20,102 +20,53 @@
             <Setter Property="MinWidth" Value="0" />
         </Style>
 
-        <!--  Quick Settings-style split tile halves. Style (accent vs default) follows the bulb's power state.  -->
-        <Style x:Key="TileToggleStyle" TargetType="ToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="VerticalAlignment" Value="Stretch" />
-            <Setter Property="CornerRadius" Value="4,0,0,4" />
-            <Setter Property="Padding" Value="0" />
-        </Style>
-
+        <!--  Three 120 px tiles with 8 px between them.  -->
         <ItemsPanelTemplate x:Key="TilePanelTemplate">
             <VariableSizedWrapGrid
-                ItemWidth="104"
+                ItemWidth="128"
                 MaximumRowsOrColumns="3"
                 Orientation="Horizontal" />
         </ItemsPanelTemplate>
 
+        <!--
+            A bulb: the main area toggles power, the slider sets brightness, the chevron opens its detail view.
+            Drag a tile onto a group to move it there, or anywhere else to take it out of its group.
+        -->
         <DataTemplate x:Key="BulbTileTemplate" x:DataType="models:Bulb">
-            <!--  Drag a tile onto a group to move it there, or anywhere else to take it out of its group.  -->
-            <StackPanel
-                Margin="4,4,4,12"
-                Background="Transparent"
+            <controls:RichSplitButton
+                Margin="4"
+                Brightness="{x:Bind Brightness, Mode=OneWay}"
+                BrightnessChanged="TileBrightness_Changed"
+                Click="TilePower_Click"
                 ContextRequested="Tile_ContextRequested"
+                Description="{x:Bind Subtitle, Mode=OneWay}"
                 DragStarting="Tile_DragStarting"
                 DropCompleted="Tile_DropCompleted"
+                Glyph="&#xE82F;"
+                IsBrightnessVisible="True"
+                IsOn="{x:Bind IsOn, Mode=OneWay}"
+                IsToggle="True"
                 Loaded="Tile_Loaded"
-                Spacing="8"
-                ToolTipService.ToolTip="{x:Bind Subtitle, Mode=OneWay}">
-                <!--  Split tile: left half toggles power, right half opens the bulb's detail view.  -->
-                <Grid Height="48" ColumnSpacing="1">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="40" />
-                    </Grid.ColumnDefinitions>
-
-                    <ToggleButton
-                        AutomationProperties.Name="{x:Bind DisplayName, Mode=OneWay}"
-                        Click="TilePower_Click"
-                        IsChecked="{x:Bind IsOn, Mode=OneWay}"
-                        Style="{StaticResource TileToggleStyle}">
-                        <FontIcon FontSize="16" Glyph="&#xE82F;" />
-                    </ToggleButton>
-
-                    <Button
-                        Grid.Column="1"
-                        Padding="0"
-                        HorizontalAlignment="Stretch"
-                        VerticalAlignment="Stretch"
-                        AutomationProperties.Name="{x:Bind local:MainPage.DetailsName(DisplayName), Mode=OneWay}"
-                        Click="TileDetails_Click"
-                        CornerRadius="0,4,4,0"
-                        Style="{x:Bind local:MainPage.TileButtonStyle(IsOn), Mode=OneWay}">
-                        <FontIcon FontSize="12" Glyph="&#xE76C;" />
-                    </Button>
-                </Grid>
-
-                <TextBlock
-                    HorizontalAlignment="Center"
-                    AutomationProperties.AccessibilityView="Raw"
-                    MaxLines="2"
-                    Opacity="{x:Bind local:MainPage.TileLabelOpacity(IsReachable), Mode=OneWay}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="{x:Bind DisplayName, Mode=OneWay}"
-                    TextAlignment="Center"
-                    TextTrimming="CharacterEllipsis"
-                    TextWrapping="Wrap" />
-            </StackPanel>
+                Opacity="{x:Bind local:MainPage.TileOpacity(IsReachable), Mode=OneWay}"
+                SecondaryClick="TileDetails_Click"
+                Status="{x:Bind local:MainPage.TileStatus(IsOn, Brightness, IsReachable), Mode=OneWay}"
+                TintColor="{x:Bind SwatchColor, Mode=OneWay}"
+                Title="{x:Bind DisplayName, Mode=OneWay}" />
         </DataTemplate>
 
-        <!--  A custom action: one button that applies its saved settings to its lights.  -->
+        <!--  A custom action: the main area applies its saved settings to its lights, the chevron edits it.  -->
         <DataTemplate x:Key="ActionTileTemplate" x:DataType="models:LightAction">
-            <StackPanel
-                Margin="4,4,4,12"
-                Background="Transparent"
+            <controls:RichSplitButton
+                Margin="4"
+                Click="ActionTile_Click"
                 ContextRequested="Tile_ContextRequested"
+                Description="{x:Bind Name, Mode=OneWay}"
                 DragStarting="Tile_DragStarting"
                 DropCompleted="Tile_DropCompleted"
+                Glyph="{x:Bind Glyph, Mode=OneWay}"
                 Loaded="Tile_Loaded"
-                Spacing="8"
-                ToolTipService.ToolTip="{x:Bind Name, Mode=OneWay}">
-                <Button
-                    Height="48"
-                    HorizontalAlignment="Stretch"
-                    AutomationProperties.Name="{x:Bind Name, Mode=OneWay}"
-                    Click="ActionTile_Click">
-                    <FontIcon FontSize="16" Glyph="{x:Bind Glyph, Mode=OneWay}" />
-                </Button>
-
-                <TextBlock
-                    HorizontalAlignment="Center"
-                    AutomationProperties.AccessibilityView="Raw"
-                    MaxLines="2"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="{x:Bind Name, Mode=OneWay}"
-                    TextAlignment="Center"
-                    TextTrimming="CharacterEllipsis"
-                    TextWrapping="Wrap" />
-            </StackPanel>
+                SecondaryClick="ActionEdit_Click"
+                Title="{x:Bind Name, Mode=OneWay}" />
         </DataTemplate>
 
         <controls:TileTemplateSelector
@@ -257,7 +208,7 @@
                 DragOver="Ungrouped_DragOver"
                 Drop="Ungrouped_Drop">
                 <!--  ItemsControl rather than ItemsRepeater: a handful of bulbs doesn't need virtualization, and never recycling containers means each bulb's controls stay bound to that bulb for life.  -->
-                <StackPanel Width="312" HorizontalAlignment="Center">
+                <StackPanel Width="384" HorizontalAlignment="Center">
                     <ItemsControl
                         ItemTemplateSelector="{StaticResource TileTemplateSelector}"
                         ItemsPanel="{StaticResource TilePanelTemplate}"
