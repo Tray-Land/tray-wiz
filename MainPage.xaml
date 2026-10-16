@@ -197,6 +197,11 @@
                                     </MenuFlyoutItem.Icon>
                                 </MenuFlyoutItem>
                                 <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Click="Settings_Click" Text="Settings">
+                                    <MenuFlyoutItem.Icon>
+                                        <FontIcon Glyph="&#xE713;" />
+                                    </MenuFlyoutItem.Icon>
+                                </MenuFlyoutItem>
                                 <MenuFlyoutItem Click="Exit_Click" Text="Exit TrayWiz">
                                     <MenuFlyoutItem.Icon>
                                         <FontIcon Glyph="&#xE8BB;" />

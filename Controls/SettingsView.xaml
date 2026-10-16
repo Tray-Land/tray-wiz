@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="TrayWiz.Controls.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    KeyboardAcceleratorPlacementMode="Hidden"
+    mc:Ignorable="d">
+
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Key="Escape" Invoked="BackAccelerator_Invoked" />
+        <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="BackAccelerator_Invoked" />
+    </UserControl.KeyboardAccelerators>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--  Header: back, title  -->
+        <Grid Padding="8,12,16,8" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Button
+                x:Name="BackButton"
+                Padding="8"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="SettingsBack"
+                AutomationProperties.Name="Back"
+                Background="Transparent"
+                BorderThickness="0"
+                Click="Back_Click"
+                ToolTipService.ToolTip="Back">
+                <FontIcon FontSize="14" Glyph="&#xE72B;" />
+            </Button>
+
+            <TextBlock
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                AutomationProperties.HeadingLevel="Level1"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Settings" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" Padding="16,4,16,16">
+            <StackPanel Spacing="14">
+                <StackPanel x:Name="StartupPanel" Spacing="4" Visibility="Collapsed">
+                    <ToggleSwitch
+                        x:Name="StartupToggle"
+                        AutomationProperties.AutomationId="StartWithWindows"
+                        Header="Start with Windows"
+                        Toggled="StartupToggle_Toggled" />
+                    <TextBlock
+                        x:Name="StartupNote"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+                </StackPanel>
+
+                <TextBlock
+                    x:Name="VersionText"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

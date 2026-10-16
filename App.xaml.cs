@@ -3,7 +3,6 @@ using Microsoft.UI.Xaml.Controls;
 using TrayWiz.Controls;
 using TrayWiz.Services;
 using TrayWiz.ViewModels;
-using Windows.ApplicationModel;
 using WinUIEx;
 
 namespace TrayWiz;
@@ -26,7 +25,6 @@ public partial class App : Application
     private EventWaitHandle? _showEvent;
     private RegisteredWaitHandle? _showWait;
     private Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
-    private StartupTaskState? _startupState;
     private bool _isShuttingDown;
 
     public App()
@@ -101,7 +99,6 @@ public partial class App : Application
             _trayIcon?.SetIcon(TrayIconPath);
             TrayIcons?.RefreshTheme();
         });
-        _ = RefreshStartupStateAsync();
 
         // Start discovery right away so the list is ready by the first click.
         _ = MainViewModel.Instance.ScanAsync();
@@ -147,8 +144,6 @@ public partial class App : Application
     internal static string TrayIconPath => Path.Combine(
         AppContext.BaseDirectory, "Assets", SystemThemeService.IsLight ? "AppIcon-dark.ico" : "AppIcon.ico");
 
-    private async Task RefreshStartupStateAsync() => _startupState = await StartupService.GetStateAsync();
-
     private TrayPopupWindow GetPopup()
     {
         if (_popup is null)
@@ -176,20 +171,7 @@ public partial class App : Application
 
         menu.Items.Add(new MenuFlyoutItem { Text = "All on", Icon = new FontIcon { Glyph = "" }, Command = vm.AllOnCommand });
         menu.Items.Add(new MenuFlyoutItem { Text = "All off", Icon = new FontIcon { Glyph = "" }, Command = vm.AllOffCommand });
-        menu.Items.Add(new MenuFlyoutItem { Text = "Search for bulbs", Icon = new FontIcon { Glyph = "" }, Command = vm.ScanCommand });
         menu.Items.Add(new MenuFlyoutSeparator());
-
-        if (_startupState is not null)
-        {
-            ToggleMenuFlyoutItem startup = new()
-            {
-                Text = "Start with Windows",
-                IsChecked = _startupState is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy,
-                IsEnabled = _startupState is StartupTaskState.Enabled or StartupTaskState.Disabled,
-            };
-            startup.Click += async (_, _) => _startupState = await StartupService.SetEnabledAsync(startup.IsChecked);
-            menu.Items.Add(startup);
-        }
 
         MenuFlyoutItem exit = new() { Text = "Exit", Icon = new FontIcon { Glyph = "" } };
         exit.Click += (_, _) => ShutdownAndExit();

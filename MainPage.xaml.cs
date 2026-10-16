@@ -121,6 +121,13 @@ public sealed partial class MainPage : Page
 
     private void NewButton_Click(object sender, RoutedEventArgs e) => ShowEditor(null);
 
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsView settings = new();
+        settings.BackRequested += (_, _) => ShowHome(restoreFocus: false);
+        ShowInDetailHost(settings, null);
+    }
+
     private void ShowEditor(LightAction? action)
     {
         ActionEditorView editor = new(ViewModel, action);
