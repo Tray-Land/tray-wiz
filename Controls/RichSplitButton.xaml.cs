@@ -178,42 +178,12 @@ public sealed partial class RichSplitButton : UserControl
             return;
         }
 
-        Color ink = InkFor(TintColor);
+        Color ink = GlyphLight.InkFor(TintColor);
         _tint.Color = TintColor;
         _ink.Color = ink;
         _divider.Color = Color.FromArgb(0x33, ink.R, ink.G, ink.B);
         VisualStateManager.GoToState(this, "On", true);
         _light.SwitchOn(CanAnimate);
-    }
-
-    /// <summary>
-    /// Near-black or white, whichever reads better on <paramref name="tint"/> as the light shows it (WCAG 2
-    /// contrast ratio): dark ink where the light leaves the tile dimmest, white ink where it lifts the text most.
-    /// </summary>
-    private static Color InkFor(Color tint)
-    {
-        double darkInkContrast = (RelativeLuminance(Shade(tint, GlyphLight.AmbientIntensity)) + 0.05) / 0.05;
-        double lightInkContrast = 1.05 / (RelativeLuminance(Shade(tint, GlyphLight.BrightestTextShade)) + 0.05);
-        return darkInkContrast >= lightInkContrast ? Color.FromArgb(0xE4, 0, 0, 0) : Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
-    }
-
-    // The color as a light of the given strength shows it: lights multiply each channel, which tops out at 255.
-    private static Color Shade(Color color, double strength)
-    {
-        return Color.FromArgb(color.A, Scale(color.R), Scale(color.G), Scale(color.B));
-
-        byte Scale(byte channel) => (byte)Math.Min(255, Math.Round(channel * strength));
-    }
-
-    private static double RelativeLuminance(Color color)
-    {
-        return (0.2126 * Linear(color.R)) + (0.7152 * Linear(color.G)) + (0.0722 * Linear(color.B));
-
-        static double Linear(byte channel)
-        {
-            double c = channel / 255.0;
-            return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
-        }
     }
 
     private void Primary_Click(object sender, RoutedEventArgs e) => Click?.Invoke(this, e);

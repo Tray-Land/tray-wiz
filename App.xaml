@@ -24,6 +24,117 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
+            <!--
+                A bare track drawn in the Foreground color. The thumb is zero-width, so the fill runs edge to edge,
+                and it doesn't take input, so every press lands on the track and Slider stays Pressed for the
+                whole drag; the knob only shows in that state. Only the horizontal parts are present (Slider
+                tolerates the missing vertical ones). Used by the tiles and the detail page's stage.
+            -->
+            <Style x:Key="TileSliderStyle" TargetType="Slider">
+                <Setter Property="ManipulationMode" Value="None" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="FocusVisualMargin" Value="-4,0" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Slider">
+                            <Grid>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="HorizontalTrackRect.Opacity" Value="0.4" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="HorizontalTrackRect.Opacity" Value="0.4" />
+                                                <Setter Target="HorizontalThumb.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled" />
+                                    </VisualStateGroup>
+                                    <VisualStateGroup x:Name="FocusEngagementStates">
+                                        <VisualState x:Name="FocusDisengaged" />
+                                        <VisualState x:Name="FocusEngagedHorizontal" />
+                                        <VisualState x:Name="FocusEngagedVertical" />
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+
+                                <Border
+                                    x:Name="FocusBorder"
+                                    Control.IsTemplateFocusTarget="True"
+                                    CornerRadius="{ThemeResource ControlCornerRadius}" />
+                                <Grid x:Name="SliderContainer" Background="Transparent">
+                                    <Grid x:Name="HorizontalTemplate">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Rectangle
+                                            x:Name="HorizontalTrackRect"
+                                            Grid.ColumnSpan="3"
+                                            Height="4"
+                                            Fill="{TemplateBinding Foreground}"
+                                            Opacity="0.25"
+                                            RadiusX="2"
+                                            RadiusY="2" />
+                                        <!--  A dot at the start, so the lowest brightness still shows some fill.  -->
+                                        <Rectangle
+                                            Grid.ColumnSpan="3"
+                                            Width="4"
+                                            Height="4"
+                                            HorizontalAlignment="Left"
+                                            Fill="{TemplateBinding Foreground}"
+                                            RadiusX="2"
+                                            RadiusY="2" />
+                                        <Rectangle
+                                            x:Name="HorizontalDecreaseRect"
+                                            Height="4"
+                                            Fill="{TemplateBinding Foreground}"
+                                            RadiusX="2"
+                                            RadiusY="2" />
+                                        <Thumb
+                                            x:Name="HorizontalThumb"
+                                            Grid.Column="1"
+                                            Width="0"
+                                            AutomationProperties.AccessibilityView="Raw"
+                                            DataContext="{TemplateBinding Value}"
+                                            Foreground="{TemplateBinding Foreground}"
+                                            IsHitTestVisible="False"
+                                            Opacity="0">
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <!--  A Canvas doesn't clip, so the knob can be wider than the zero-width thumb.  -->
+                                                    <Canvas HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <Ellipse
+                                                            Canvas.Left="-8"
+                                                            Canvas.Top="-8"
+                                                            Width="16"
+                                                            Height="16"
+                                                            Fill="{ThemeResource ControlSolidFillColorDefaultBrush}"
+                                                            Stroke="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                                            StrokeThickness="1" />
+                                                        <Ellipse
+                                                            Canvas.Left="-4"
+                                                            Canvas.Top="-4"
+                                                            Width="8"
+                                                            Height="8"
+                                                            Fill="{TemplateBinding Foreground}" />
+                                                    </Canvas>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

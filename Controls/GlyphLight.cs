@@ -3,6 +3,7 @@ using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Hosting;
+using Windows.UI;
 
 namespace TrayWiz.Controls;
 
@@ -38,6 +39,7 @@ internal sealed class GlyphLight
     private static readonly TimeSpan SwitchOffDuration = TimeSpan.FromMilliseconds(300);
     private static readonly TimeSpan LevelDuration = TimeSpan.FromMilliseconds(300);
 
+    private readonly float _reach;
     private readonly Compositor _compositor;
     private readonly Visual[] _targets;
     private readonly AmbientLight _ambient;
@@ -56,7 +58,17 @@ internal sealed class GlyphLight
     private int _switches;
 
     public GlyphLight(UIElement space, FrameworkElement glyph, params UIElement[] targets)
+        : this(space, glyph, 1, targets)
     {
+    }
+
+    /// <param name="reach">
+    /// How much larger than a tile the lit surface is: the point light hovers this many times higher, so the pool
+    /// spreads across it the same way.
+    /// </param>
+    public GlyphLight(UIElement space, FrameworkElement glyph, float reach, params UIElement[] targets)
+    {
+        _reach = reach;
         Visual spaceVisual = ElementCompositionPreview.GetElementVisual(space);
         _compositor = spaceVisual.Compositor;
         _targets = Array.ConvertAll(targets, ElementCompositionPreview.GetElementVisual);
@@ -191,8 +203,38 @@ internal sealed class GlyphLight
         animation.SetReferenceParameter("glow", _glow);
         animation.SetScalarParameter("MinIntensity", MinIntensity);
         animation.SetScalarParameter("MaxIntensity", MaxIntensity);
-        animation.SetScalarParameter("MinHeight", MinHeight);
-        animation.SetScalarParameter("MaxHeight", MaxHeight);
+        animation.SetScalarParameter("MinHeight", MinHeight * _reach);
+        animation.SetScalarParameter("MaxHeight", MaxHeight * _reach);
         return animation;
+    }
+
+    /// <summary>
+    /// Near-black or white, whichever reads better on <paramref name="tint"/> as the light shows it (WCAG 2
+    /// contrast ratio): dark ink where the light leaves the surface dimmest, white ink where it lifts the text most.
+    /// </summary>
+    public static Color InkFor(Color tint)
+    {
+        double darkInkContrast = (RelativeLuminance(Shade(tint, AmbientIntensity)) + 0.05) / 0.05;
+        double lightInkContrast = 1.05 / (RelativeLuminance(Shade(tint, BrightestTextShade)) + 0.05);
+        return darkInkContrast >= lightInkContrast ? Color.FromArgb(0xE4, 0, 0, 0) : Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF);
+    }
+
+    // The color as a light of the given strength shows it: lights multiply each channel, which tops out at 255.
+    private static Color Shade(Color color, double strength)
+    {
+        return Color.FromArgb(color.A, Scale(color.R), Scale(color.G), Scale(color.B));
+
+        byte Scale(byte channel) => (byte)Math.Min(255, Math.Round(channel * strength));
+    }
+
+    private static double RelativeLuminance(Color color)
+    {
+        return (0.2126 * Linear(color.R)) + (0.7152 * Linear(color.G)) + (0.0722 * Linear(color.B));
+
+        static double Linear(byte channel)
+        {
+            double c = channel / 255.0;
+            return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
     }
 }
