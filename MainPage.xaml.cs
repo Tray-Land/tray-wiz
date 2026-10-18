@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using TrayWiz.Controls;
 using TrayWiz.Models;
 using TrayWiz.Services;
@@ -23,8 +24,15 @@ public sealed partial class MainPage : Page
     // How far (in DIPs) the pointer must move over a tile before a press becomes a drag.
     private const double DragThreshold = 8;
 
+    private static readonly UISettings Settings = new();
+
     // The tile whose chevron opened the current detail view, so focus can return to it.
     private RichSplitButton? _detailOrigin;
+
+    // A tile's flight between a tile and its detail view, while it's in the air. Both ends have to stay
+    // in the tree until it lands: removing one sooner crashes WinUI (a null dereference in
+    // CConnectedAnimationService::PreCommit), so a flight is grounded before its view can go.
+    private ConnectedAnimation? _flight;
 
     // The tile being dragged. Drags only ever happen within this page, so the payload is kept here.
     private TileItem? _draggedTile;
@@ -35,11 +43,15 @@ public sealed partial class MainPage : Page
     private readonly PointerEventHandler _tilePointerPressed;
     private readonly PointerEventHandler _tilePointerMoved;
 
+    // DetailHost's entrance transition, left off while a connected animation brings a view in instead.
+    private readonly TransitionCollection _slideIn;
+
     public MainPage()
     {
         _tilePointerPressed = Tile_PointerPressed;
         _tilePointerMoved = Tile_PointerMoved;
         InitializeComponent();
+        _slideIn = DetailHost.ContentTransitions;
     }
 
     public MainViewModel ViewModel => MainViewModel.Instance;
@@ -113,8 +125,49 @@ public sealed partial class MainPage : Page
     {
         // A new view per bulb: rebinding existing sliders to another bulb could clamp and send values.
         BulbDetailView detail = new(bulb);
-        detail.BackRequested += (_, _) => ShowHome(restoreFocus: true);
-        ShowInDetailHost(detail, origin);
+        detail.BackRequested += (_, _) =>
+        {
+            // The flight home starts from this view's stage, so the view only collapses until it lands.
+            ConnectedAnimation? flight = PrepareFlight(detail.CardElement, new DirectConnectedAnimationConfiguration());
+            ShowHome(restoreFocus: true, keepView: flight is not null);
+            if (flight is not null && !flight.TryStart(origin))
+                ShowHome(restoreFocus: false);
+        };
+
+        // The tile grows into the detail view's stage, which takes the place of the usual slide in.
+        ConnectedAnimation? arrival = PrepareFlight(origin, new GravityConnectedAnimationConfiguration { IsShadowEnabled = false });
+        ShowInDetailHost(detail, origin, arrival);
+    }
+
+    /// <summary>Snapshots a tile or a detail view's stage to fly between the two, unless animations are off.</summary>
+    private ConnectedAnimation? PrepareFlight(UIElement source, ConnectedAnimationConfiguration configuration)
+    {
+        GroundFlight();
+        if (!Settings.AnimationsEnabled)
+            return null;
+
+        ConnectedAnimation flight = ConnectedAnimationService.GetForCurrentView().PrepareToAnimate(BulbDetailView.FlightKey, source);
+        flight.Configuration = configuration;
+        flight.Completed += (_, _) =>
+        {
+            if (_flight != flight)
+                return;
+
+            _flight = null;
+
+            // A view left in place for the flight home goes once the tile has landed.
+            if (HomeView.Visibility == Visibility.Visible)
+                ShowHome(restoreFocus: false);
+        };
+        _flight = flight;
+        return flight;
+    }
+
+    private void GroundFlight()
+    {
+        ConnectedAnimation? flight = _flight;
+        _flight = null;
+        flight?.Cancel();
     }
 
     private void ActionTile_Click(object sender, RoutedEventArgs e)
@@ -166,20 +219,31 @@ public sealed partial class MainPage : Page
         ShowInDetailHost(editor, null);
     }
 
-    private void ShowInDetailHost(UIElement view, RichSplitButton? origin)
+    /// <param name="arrival">A flight that brings the view in, in place of the usual slide in.</param>
+    private void ShowInDetailHost(UIElement view, RichSplitButton? origin, ConnectedAnimation? arrival = null)
     {
+        if (_flight != arrival)
+            GroundFlight();
+
         _detailOrigin = origin;
+        DetailHost.ContentTransitions = arrival is null ? _slideIn : null;
         DetailHost.Content = view;
         DetailHost.Visibility = Visibility.Visible;
         HomeView.Visibility = Visibility.Collapsed;
     }
 
-    private void ShowHome(bool restoreFocus)
+    /// <param name="keepView">Leaves the view in the tree, collapsed, for a flight that starts from it; it goes on the next call.</param>
+    private void ShowHome(bool restoreFocus, bool keepView = false)
     {
         if (DetailHost.Content is null)
             return;
 
-        DetailHost.Content = null;
+        if (!keepView)
+        {
+            GroundFlight();
+            DetailHost.Content = null;
+        }
+
         DetailHost.Visibility = Visibility.Collapsed;
         HomeView.Visibility = Visibility.Visible;
 
@@ -408,7 +472,7 @@ public sealed partial class MainPage : Page
         Dictionary<BulbGroup, double> before = ViewModel.Groups.ToDictionary(g => g, GroupTop);
         ViewModel.MoveGroup(group, offset);
 
-        if (!new UISettings().AnimationsEnabled)
+        if (!Settings.AnimationsEnabled)
             return;
 
         GroupsList.UpdateLayout();
