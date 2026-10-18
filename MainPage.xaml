@@ -39,7 +39,7 @@
                 BrightnessChanged="TileBrightness_Changed"
                 Click="TilePower_Click"
                 ContextRequested="Tile_ContextRequested"
-                Description="{x:Bind Subtitle, Mode=OneWay}"
+                Description="{x:Bind DisplayName, Mode=OneWay}"
                 DragStarting="Tile_DragStarting"
                 DropCompleted="Tile_DropCompleted"
                 Glyph="&#xE82F;"
