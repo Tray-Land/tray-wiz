@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:TrayWiz.Controls"
     KeyboardAcceleratorPlacementMode="Hidden"
     mc:Ignorable="d">
 
@@ -16,13 +17,16 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!--  Header: back, bulb identity, power  -->
-        <Grid Padding="8,12,16,8" ColumnSpacing="10">
+        <!--  Header: back, the bulb's name (with a pencil to rename it), blink  -->
+        <Grid
+            x:Name="Header"
+            Padding="8,12,8,8"
+            ColumnSpacing="10">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -41,85 +45,82 @@
                 <FontIcon FontSize="14" Glyph="&#xE72B;" />
             </Button>
 
-            <Ellipse
-                Grid.Column="1"
-                Width="22"
-                Height="22"
-                VerticalAlignment="Center"
-                AutomationProperties.AccessibilityView="Raw"
-                Stroke="{ThemeResource ControlStrokeColorDefaultBrush}"
-                StrokeThickness="1">
-                <Ellipse.Fill>
-                    <SolidColorBrush Color="{x:Bind Bulb.SwatchColor, Mode=OneWay}" />
-                </Ellipse.Fill>
-            </Ellipse>
+            <!--  Showing the name or, while renaming, the box that replaces it.  -->
+            <Grid Grid.Column="1" VerticalAlignment="Center">
+                <StackPanel x:Name="NameDisplay">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <TextBlock
+                            MaxWidth="220"
+                            VerticalAlignment="Center"
+                            AutomationProperties.HeadingLevel="Level1"
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="{x:Bind Bulb.DisplayName, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis" />
+                        <Button
+                            x:Name="EditButton"
+                            Padding="5"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="BulbDetailRename"
+                            AutomationProperties.Name="Rename"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="Edit_Click"
+                            ToolTipService.ToolTip="Rename">
+                            <FontIcon FontSize="12" Glyph="&#xE70F;" />
+                        </Button>
+                    </StackPanel>
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind Bulb.Subtitle, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap" />
+                </StackPanel>
+                <TextBox
+                    x:Name="NameBox"
+                    AutomationProperties.Name="Name"
+                    KeyDown="NameBox_KeyDown"
+                    LostFocus="NameBox_LostFocus"
+                    MaxLength="40"
+                    PlaceholderText="{x:Bind Bulb.DisplayName, Mode=OneWay}"
+                    Visibility="Collapsed" />
+            </Grid>
 
-            <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                <TextBlock
-                    Style="{StaticResource BodyStrongTextBlockStyle}"
-                    Text="{x:Bind Bulb.DisplayName, Mode=OneWay}"
-                    TextTrimming="CharacterEllipsis" />
-                <TextBlock
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="{x:Bind Bulb.Subtitle, Mode=OneWay}"
-                    TextTrimming="CharacterEllipsis"
-                    TextWrapping="NoWrap" />
-            </StackPanel>
-
-            <ToggleSwitch
-                Grid.Column="3"
-                MinWidth="0"
-                Margin="0,0,-8,0"
+            <Button
+                Grid.Column="2"
+                Padding="8"
                 VerticalAlignment="Center"
-                AutomationProperties.AutomationId="BulbDetailPower"
-                AutomationProperties.Name="{x:Bind Bulb.DisplayName, Mode=OneWay}"
-                IsOn="{x:Bind Bulb.IsOn, Mode=OneWay}"
-                OffContent=""
-                OnContent=""
-                Toggled="Power_Toggled" />
+                AutomationProperties.Name="Blink"
+                Background="Transparent"
+                BorderThickness="0"
+                Command="{x:Bind Bulb.IdentifyCommand}"
+                ToolTipService.ToolTip="Blink this bulb so you can find it">
+                <FontIcon FontSize="14" Glyph="&#xE7B3;" />
+            </Button>
         </Grid>
 
-        <ScrollViewer Grid.Row="1" Padding="16,4,16,16">
+        <!--
+            The stage stays in view while the controls below scroll. It is the home page tile blown up: the bulb
+            top left, the power switch top right, brightness along the bottom, lit in the light's color.
+            Bindings to bulb state are OneWay only (a slider clamps its value to its range while bindings apply,
+            and a TwoWay binding would write that back to a real light); changes go out from the stage's events.
+            A fresh view is created per bulb, so the controls never rebind from one bulb to another.
+        -->
+        <local:BulbStage
+            x:Name="Stage"
+            Grid.Row="1"
+            Margin="16,4,16,6"
+            Brightness="{x:Bind Bulb.Brightness, Mode=OneWay}"
+            BrightnessChanged="Stage_BrightnessChanged"
+            IsOn="{x:Bind Bulb.IsOn, Mode=OneWay}"
+            LightColor="{x:Bind Bulb.LightColor, Mode=OneWay}"
+            PowerChanged="Stage_PowerChanged" />
+
+        <ScrollViewer
+            x:Name="Body"
+            Grid.Row="2"
+            Padding="16,8,16,16">
             <StackPanel Spacing="14">
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox
-                        Header="Name"
-                        KeyDown="NameBox_KeyDown"
-                        LostFocus="NameBox_LostFocus"
-                        MaxLength="40"
-                        PlaceholderText="{x:Bind Bulb.DisplayName, Mode=OneWay}"
-                        Text="{x:Bind Bulb.Name, Mode=OneWay}" />
-                    <Button
-                        Grid.Column="1"
-                        VerticalAlignment="Bottom"
-                        Command="{x:Bind Bulb.IdentifyCommand}"
-                        ToolTipService.ToolTip="Blink this bulb so you can find it">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon FontSize="14" Glyph="&#xE7B3;" />
-                            <TextBlock Text="Blink" />
-                        </StackPanel>
-                    </Button>
-                </Grid>
-
-                <!--
-                    Bindings to bulb state are OneWay only: while bindings apply, a slider clamps its
-                    value to its current range, and a TwoWay binding would write that back and change a
-                    real light. Commands go out from the change handlers (see IsUserChange). A fresh
-                    view is created per bulb, so the controls never rebind from one bulb to another.
-                -->
-                <Slider
-                    Header="Brightness"
-                    Maximum="100"
-                    Minimum="10"
-                    StepFrequency="1"
-                    Value="{x:Bind Bulb.Brightness, Mode=OneWay}"
-                    ValueChanged="Brightness_ValueChanged" />
-
                 <Slider
                     Header="White temperature (K)"
                     Minimum="{x:Bind Bulb.MinTemperature, Mode=OneWay}"

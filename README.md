@@ -7,6 +7,7 @@ Control your [WiZ](https://www.wizconnected.com/) smart bulbs from the Windows s
 - **Finds your bulbs automatically.** It broadcasts a discovery request on your local network at startup, and again when you open the flyout with no bulbs known. There is no account and no cloud.
 - **One tile per light.** A light's tile takes on its current color while it's on, and glows from its bulb icon: the brighter the light, the stronger and wider the glow. Click the tile to switch it on or off, drag along its bottom edge to dim it, or click the chevron for its full controls. Custom buttons get the same tile: click to run, chevron to edit.
 - **Controls each bulb.** On/off, brightness, color temperature, RGB color (presets plus a picker), and the built-in WiZ scenes. Tunable-white bulbs only show the controls and scenes they can render.
+- **Shows the light.** A bulb's detail page opens with its tile's bulb icon flying up onto a dark stage, where the light strikes: a halo on the wall and a pool on the floor in the bulb's color, as bright and wide as its brightness. Every change you make eases across on the stage, and switching off lets the light die away.
 - **Groups.** Put bulbs into named groups, reorder them, and switch a whole group at once.
 - **Extra tray icons.** Right-click a light, group, or custom button and choose *Add new tray icon*. Each icon has its own glyph and its own left click, right click, and double-clicks: do nothing, open TrayWiz, toggle, swap between brightness levels or colors, or run the button. Left or right click must show the icon's menu, which is where you edit or remove it.
 - **Remembers your setup.** Names, last-known IP addresses (keyed by MAC), and groups persist across runs, because bulbs don't store names themselves.
@@ -66,7 +67,8 @@ Release: `build-msix-for-gh.ps1` builds signed x64 and ARM64 packages and create
 | `Controls/TrayPopupWindow` | Borderless flyout: placement, light-dismiss, animation, idle close |
 | `Controls/RichSplitButton` | Home tile: toggle, brightness slider, and details chevron, tinted with the light's color |
 | `Controls/GlyphLight.cs` | Composition lights that make a tile glow from its icon, animated on switch and brightness changes |
-| `Controls/BulbDetailView` | Per-bulb controls |
+| `Controls/BulbDetailView` | Per-bulb controls, with the connected animation from its tile |
+| `Controls/BulbStage` | The detail page's top card: the tile blown up, tinted and lit from the bulb by `GlyphLight`, with the power switch and brightness slider on it |
 | `Controls/ShellBackdrop.cs` | Acrylic that matches shell flyouts |
 | `MainPage`, `ViewModels/MainViewModel.cs` | Bulb list, groups, scan and refresh |
 | `Services/WizClient.cs` | WiZ UDP JSON protocol: discovery, requests, throttled `setPilot` |

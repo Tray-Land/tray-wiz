@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="TrayWiz.Controls.BulbStage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:TrayWiz.Controls"
+    Height="132">
+
+    <UserControl.Resources>
+        <!--  Per-instance brushes; UpdateLook sets their colors from LightColor.  -->
+        <SolidColorBrush x:Key="TintBrush" />
+        <SolidColorBrush x:Key="InkBrush" />
+    </UserControl.Resources>
+
+    <!--
+        The root carries the ink color, as in RichSplitButton: text inherits it and the slider binds to it.
+        While on, the card takes the light's color and is lit from the glyph (see GlyphLight).
+    -->
+    <ContentPresenter x:Name="Root" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="PowerStates">
+                <VisualState x:Name="Off" />
+                <VisualState x:Name="On">
+                    <VisualState.Setters>
+                        <Setter Target="Root.Foreground" Value="{StaticResource InkBrush}" />
+                        <Setter Target="Card.Background" Value="{StaticResource TintBrush}" />
+                    </VisualState.Setters>
+                </VisualState>
+                <!--  High contrast never shows the light's own color; system colors keep the text readable.  -->
+                <VisualState x:Name="OnHighContrast">
+                    <VisualState.Setters>
+                        <Setter Target="Root.Foreground" Value="{ThemeResource SystemColorHighlightTextColorBrush}" />
+                        <Setter Target="Card.Background" Value="{ThemeResource SystemColorHighlightColorBrush}" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <Grid>
+            <Border
+                x:Name="Card"
+                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8" />
+
+            <!--  The connected animation from a tile's glyph lands here (see BulbDetailView).  -->
+            <FontIcon
+                x:Name="GlyphIcon"
+                Margin="20,16,0,0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                AutomationProperties.AccessibilityView="Raw"
+                FontSize="32"
+                Glyph="&#xE82F;" />
+
+            <ToggleSwitch
+                MinWidth="0"
+                Margin="0,10,0,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                AutomationProperties.AutomationId="BulbDetailPower"
+                AutomationProperties.Name="Power"
+                IsOn="{x:Bind IsOn, Mode=OneWay}"
+                OffContent=""
+                OnContent=""
+                Toggled="Power_Toggled" />
+
+            <TextBlock
+                Margin="20,0,0,40"
+                VerticalAlignment="Bottom"
+                AutomationProperties.AccessibilityView="Raw"
+                FontSize="20"
+                FontWeight="SemiLight"
+                Text="{x:Bind local:BulbStage.ReadoutText(IsOn, Brightness), Mode=OneWay}" />
+
+            <!--
+                Along the bottom like the tile's. Its value only ever arrives OneWay; user changes go out through
+                BrightnessChanged (see Brightness_ValueChanged). While off, the slider still sets the level the
+                light comes back at, so it's muted.
+            -->
+            <Slider
+                Height="28"
+                Margin="20,0,20,12"
+                VerticalAlignment="Bottom"
+                AutomationProperties.Name="Brightness"
+                Foreground="{x:Bind Root.Foreground, Mode=OneWay}"
+                LargeChange="20"
+                Maximum="100"
+                Minimum="10"
+                Opacity="{x:Bind local:RichSplitButton.SliderOpacity(IsOn), Mode=OneWay}"
+                SmallChange="10"
+                StepFrequency="1"
+                Style="{StaticResource TileSliderStyle}"
+                Value="{x:Bind Brightness, Mode=OneWay}"
+                ValueChanged="Brightness_ValueChanged" />
+        </Grid>
+    </ContentPresenter>
+</UserControl>
