@@ -27,6 +27,16 @@ public sealed partial class MainViewModel : ObservableObject
             Actions.Add(action);
             (GroupOf(action)?.Tiles ?? Ungrouped).Add(action);
         }
+
+        // Show the last-known lights immediately; scanning then refreshes them in place.
+        foreach (SavedBulb saved in _saved.Values)
+        {
+            Bulb bulb = new(saved.Mac, saved.LastIp ?? "");
+            bulb.ApplySaved(saved);
+            AddBulb(bulb);
+        }
+        Sort(Bulbs);
+
         Sort(Ungrouped);
         foreach (BulbGroup group in Groups)
             Sort(group.Tiles);
@@ -116,6 +126,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
 
         await RefreshAsync(Bulbs.ToList());
+        SaveAll();
     }
 
     /// <summary>Re-reads the given bulbs' state.</summary>

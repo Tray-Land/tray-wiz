@@ -14,6 +14,16 @@ public sealed class SavedBulb
     public string? ModuleName { get; set; }
     public double? MinTemperature { get; set; }
     public double? MaxTemperature { get; set; }
+
+    /// <summary>Last state seen, so the list can show something real before the bulbs answer.</summary>
+    public bool? IsOn { get; set; }
+    public double? Brightness { get; set; }
+    public double? Temperature { get; set; }
+
+    /// <summary>RRGGBB.</summary>
+    public string? Color { get; set; }
+    public int? SceneId { get; set; }
+    public string? Mode { get; set; }
 }
 
 public sealed class SavedGroup

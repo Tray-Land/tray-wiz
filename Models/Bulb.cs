@@ -62,16 +62,16 @@ public sealed partial class Bulb : TileItem
     public partial double Brightness { get; set; } = 100;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SwatchColor))]
+    [NotifyPropertyChangedFor(nameof(SwatchColor), nameof(LightColor))]
     public partial double Temperature { get; set; } = 2700;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SwatchColor))]
+    [NotifyPropertyChangedFor(nameof(SwatchColor), nameof(LightColor))]
     public partial Color Color { get; set; } = Color.FromArgb(255, 255, 180, 100);
 
     /// <summary>Index into <see cref="Scenes"/>, or -1 when no scene is active.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SwatchColor))]
+    [NotifyPropertyChangedFor(nameof(SwatchColor), nameof(LightColor))]
     public partial int SceneIndex { get; set; } = -1;
 
     public override string Key => Mac;
@@ -100,21 +100,15 @@ public sealed partial class Bulb : TileItem
     }
 
     /// <summary>Approximation of what the bulb is showing, for the list swatch.</summary>
-    public Color SwatchColor
-    {
-        get
-        {
-            if (!IsOn)
-                return Color.FromArgb(255, 110, 110, 110);
+    public Color SwatchColor => IsOn ? LightColor : Color.FromArgb(255, 110, 110, 110);
 
-            return _mode switch
-            {
-                LightMode.Color => Color,
-                LightMode.Scene when SceneIndex >= 0 && SceneIndex < Scenes.Count => Scenes[SceneIndex].Swatch,
-                _ => KelvinToColor(Temperature),
-            };
-        }
-    }
+    /// <summary>Approximation of the color the bulb gives off while on (kept while it's off).</summary>
+    public Color LightColor => _mode switch
+    {
+        LightMode.Color => Color,
+        LightMode.Scene when SceneIndex >= 0 && SceneIndex < Scenes.Count => Scenes[SceneIndex].Swatch,
+        _ => KelvinToColor(Temperature),
+    };
 
     public void ApplySystemConfig(JsonObject? systemConfig, JsonObject? modelConfig)
     {
@@ -195,6 +189,7 @@ public sealed partial class Bulb : TileItem
                 Brightness = fixedDimming;
         }
 
+        OnPropertyChanged(nameof(LightColor));
         OnPropertyChanged(nameof(SwatchColor));
     }
 
@@ -206,6 +201,12 @@ public sealed partial class Bulb : TileItem
         ModuleName = ModuleName,
         MinTemperature = MinTemperature,
         MaxTemperature = MaxTemperature,
+        IsOn = IsOn,
+        Brightness = Brightness,
+        Temperature = Temperature,
+        Color = $"{Color.R:X2}{Color.G:X2}{Color.B:X2}",
+        SceneId = SceneIndex >= 0 && SceneIndex < Scenes.Count ? Scenes[SceneIndex].Id : null,
+        Mode = _mode.ToString(),
     };
 
     /// <summary>Restores remembered name and capabilities for a bulb that hasn't answered yet.</summary>
@@ -219,6 +220,23 @@ public sealed partial class Bulb : TileItem
             MinTemperature = saved.MinTemperature.Value;
             MaxTemperature = saved.MaxTemperature.Value;
         }
+
+        // Capabilities are in place; restore the last-seen look.
+        if (saved.IsOn is bool isOn)
+            IsOn = isOn;
+        if (saved.Brightness is double brightness)
+            Brightness = Math.Clamp(brightness, 10, 100);
+        if (saved.Temperature is double kelvin)
+            Temperature = Math.Clamp(kelvin, MinTemperature, MaxTemperature);
+        if (TryParseHex(saved.Color, out Color color))
+            Color = color;
+        if (saved.SceneId is int sceneId && IndexOfScene(sceneId) is int index and >= 0)
+            SceneIndex = index;
+        if (Enum.TryParse(saved.Mode, out LightMode mode))
+            _mode = mode;
+
+        OnPropertyChanged(nameof(LightColor));
+        OnPropertyChanged(nameof(SwatchColor));
     }
 
     public void SetOn(bool on)
@@ -332,10 +350,6 @@ public sealed partial class Bulb : TileItem
 
     private void SendLighting(JsonObject parameters, LightMode? modeChange)
     {
-        // Adjusting any lighting value implies the user wants the light on.
-        parameters["state"] = true;
-        IsOn = true;
-
         if (modeChange is LightMode mode)
         {
             _mode = mode;
@@ -347,6 +361,12 @@ public sealed partial class Bulb : TileItem
                 parameters["dimming"] = fixedDimming;
             }
         }
+        OnPropertyChanged(nameof(LightColor));
+
+        // Adjusting any lighting value implies the user wants the light on. Switched on after the new look
+        // is in place, so a light coming on here comes on in its new color.
+        parameters["state"] = true;
+        IsOn = true;
         OnPropertyChanged(nameof(SwatchColor));
 
         WizClient.SetPilotThrottled(Ip, parameters);
