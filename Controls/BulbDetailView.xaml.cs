@@ -50,7 +50,7 @@ public sealed partial class BulbDetailView : UserControl
     // With a flight prepared, the tile grows into the stage while the header and controls ride in alongside it.
     // The stage shows the bulb's state from the start, so a lit bulb is lit throughout.
     private void Arrive() =>
-        ConnectedAnimationService.GetForCurrentView().GetAnimation(FlightKey)?.TryStart(Stage, [Header, Body]);
+        ConnectedAnimationService.GetForCurrentView().GetAnimation(FlightKey)?.TryStart(Stage, new UIElement[] { Header, Body });
 
     private void Back_Click(object sender, RoutedEventArgs e) => BackRequested?.Invoke(this, EventArgs.Empty);
 

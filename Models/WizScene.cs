@@ -10,7 +10,7 @@ public sealed record WizScene(int Id, string Name, Color Swatch, int? Dimming = 
 {
     public override string ToString() => Name;
 
-    public static readonly IReadOnlyList<WizScene> All =
+    public static readonly IReadOnlyList<WizScene> All = (List<WizScene>)
     [
         new(1, "Ocean", Rgb(30, 130, 220)), new(2, "Romance", Rgb(235, 70, 120)),
         new(3, "Sunset", Rgb(255, 120, 50)), new(4, "Party", Rgb(220, 50, 200)),
@@ -33,7 +33,7 @@ public sealed record WizScene(int Id, string Name, Color Swatch, int? Dimming = 
     // Scenes a tunable-white-only bulb can render (no RGB channels).
     private static readonly HashSet<int> WhiteSceneIds = [6, 9, 10, 11, 12, 13, 14, 15, 16, 18, 29, 30, 31, 32];
 
-    public static readonly IReadOnlyList<WizScene> White = [.. All.Where(s => WhiteSceneIds.Contains(s.Id))];
+    public static readonly IReadOnlyList<WizScene> White = (List<WizScene>)[.. All.Where(s => WhiteSceneIds.Contains(s.Id))];
 
     private static Color Rgb(byte r, byte g, byte b) => Color.FromArgb(255, r, g, b);
 
