@@ -25,7 +25,7 @@ The flyout opens when you launch the app (not when Windows starts it at sign-in,
 
 ## Install
 
-Download the signed MSIX from the [Releases](https://github.com/Tray-Land/tray-wiz/releases) page. If Windows won't install it, import the signing certificate included with the release into *Trusted People* first, then open the MSIX.
+Download [TrayWiz.appinstaller](https://github.com/Tray-Land/tray-wiz/releases/latest/download/TrayWiz.appinstaller) and open it. Windows installs the right version for your PC (x64 or ARM64) and keeps it updated.
 
 ## Privacy and footprint
 
@@ -57,7 +57,7 @@ Build:
 dotnet build -c Debug -p:Platform=x64   # or ARM64
 ```
 
-Release: `build-msix-for-gh.ps1` builds signed x64 and ARM64 packages and creates a draft GitHub release.
+Release: bump `Identity/@Version` in `Package.appxmanifest`, commit and push, then run `.\build-msix-for-gh.ps1`. It builds a signed x64 + ARM64 `.msixbundle` and the auto-updating `TrayWiz.appinstaller` feed, and creates a draft GitHub release. Publish the draft without changing its tag, then run `.\build-msix-for-gh.ps1 -VerifyPublished` to check the feed. `-SkipRelease -NoSign` builds and checks the bundle without signing or releasing.
 
 ### Project layout
 
