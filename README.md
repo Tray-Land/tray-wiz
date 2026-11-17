@@ -25,6 +25,8 @@ The flyout opens when you launch the app (not when Windows starts it at sign-in,
 
 ## Install
 
+[<img src="docs/MSIX.svg" alt="Install TrayWiz (MSIX)" width="212">](https://github.com/Tray-Land/tray-wiz/releases/latest/download/TrayWiz.appinstaller)
+
 Download [TrayWiz.appinstaller](https://github.com/Tray-Land/tray-wiz/releases/latest/download/TrayWiz.appinstaller) and open it. Windows installs the right version for your PC (x64 or ARM64) and keeps it updated.
 
 ## Privacy and footprint
